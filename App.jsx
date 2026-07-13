@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
-  Stethoscope, Scale,
+  Stethoscope, Scale, Ruler,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -80,6 +80,18 @@ async function ecrire(cle, valeur) {
   } catch (e) {}
 }
 
+/* Migration : l'ancien profil « maman » devient « valerie » */
+const ANCIENS_PROFILS = { valerie: "maman" };
+
+async function lireProfil(p, suffixe) {
+  let v = await lire(`${p}:${suffixe}`);
+  if (v == null && ANCIENS_PROFILS[p]) {
+    v = await lire(`${ANCIENS_PROFILS[p]}:${suffixe}`);
+    if (v != null) ecrire(`${p}:${suffixe}`, v);
+  }
+  return v;
+}
+
 /* ------------------------------------------------------------------ */
 /* Dates (semaine = lundi → dimanche)                                  */
 /* ------------------------------------------------------------------ */
@@ -103,16 +115,212 @@ function semainesAvant(isoLundi, n) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Le programme                                                        */
+/* Profils & mesures                                                   */
 /* ------------------------------------------------------------------ */
 
 const PROFILS = {
   esteban: { nom: "Esteban", initiale: "E", detail: "Reprise en main" },
-  maman: { nom: "Maman", initiale: "M", detail: "Reprise en douceur" },
+  valerie: { nom: "Valérie", initiale: "V", detail: "Reprise en douceur" },
 };
 
+const MESURES_DEFAUT = {
+  esteban: { age: "29", taille: "170", poids: "79" },
+  valerie: { age: "54", taille: "154", poids: "65" },
+};
+
+/* ------------------------------------------------------------------ */
+/* Les exercices (partagés entre les deux programmes : la charge       */
+/* notée sur un exercice suit dans tous les modes)                     */
+/* ------------------------------------------------------------------ */
+
+const EXOS = {
+  presse: {
+    id: "presse",
+    nom: "Presse à cuisses",
+    zone: "Jambes",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 40–60 kg", valerie: "Départ conseillé : 15–25 kg" },
+    variante: "Poids libres : goblet squat avec un haltère.",
+    conseil:
+      "Pieds à largeur d’épaules, descends jusqu’à 90° et pousse sans jamais verrouiller les genoux.",
+  },
+  "dev-poitrine": {
+    id: "dev-poitrine",
+    nom: "Développé poitrine assis",
+    zone: "Poussée",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 7,5–12,5 kg" },
+    variante: "Poids libres : développé haltères sur banc.",
+    conseil: "Omoplates serrées contre le dossier, pousse en expirant, redescends en 2 secondes.",
+  },
+  "tirage-vertical": {
+    id: "tirage-vertical",
+    nom: "Tirage vertical",
+    zone: "Tirage",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    variante: "Machine à tractions assistées si disponible.",
+    conseil: "Tire la barre vers le haut de la poitrine, coudes vers le bas — pas derrière la nuque.",
+  },
+  "leg-curl": {
+    id: "leg-curl",
+    nom: "Leg curl assis",
+    zone: "Jambes",
+    series: 2,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 25–35 kg", valerie: "Départ conseillé : 10–15 kg" },
+    variante: "Version allongée selon les machines de la salle.",
+    conseil: "Fléchis en 1 seconde, retiens la remontée en 3 secondes. Les ischios adorent la lenteur.",
+  },
+  planche: {
+    id: "planche",
+    nom: "Planche",
+    zone: "Gainage",
+    series: 3,
+    reps: "20–40 s",
+    repos: 60,
+    sansCharge: true,
+    charge: { esteban: "Sur les avant-bras, corps aligné", valerie: "Sur les genoux au départ — parfait aussi" },
+    variante: "Trop facile ? Décolle un pied 5 s de chaque côté.",
+    conseil: "Serre les fessiers et le ventre, ne laisse pas le bas du dos se creuser.",
+  },
+  goblet: {
+    id: "goblet",
+    nom: "Goblet squat",
+    zone: "Jambes",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–8 kg" },
+    variante: "Genoux sensibles ce jour-là ? Repasse sur la presse à cuisses.",
+    conseil: "Haltère serré contre la poitrine, dos droit, talons au sol. Descends comme pour t’asseoir.",
+  },
+  "dev-epaules": {
+    id: "dev-epaules",
+    nom: "Développé épaules assis",
+    zone: "Poussée",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
+    variante: "Poids libres : développé avec deux haltères légers.",
+    conseil: "Ne hausse pas les épaules vers les oreilles ; le mouvement reste fluide, sans à-coups.",
+  },
+  rowing: {
+    id: "rowing",
+    nom: "Rowing assis machine",
+    zone: "Tirage",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    variante: "Ou tirage horizontal à la poulie basse.",
+    conseil: "Poitrine contre le support, tire les coudes vers l’arrière et serre les omoplates 1 seconde.",
+  },
+  "hip-thrust": {
+    id: "hip-thrust",
+    nom: "Pont fessier (hip thrust)",
+    zone: "Jambes",
+    series: 3,
+    reps: "15",
+    repos: 60,
+    charge: {
+      esteban: "Haltère ou disque de 10–20 kg sur les hanches",
+      valerie: "Poids du corps, puis 5–10 kg quand c’est facile",
+    },
+    variante: "Machine hip thrust si ta salle en a une.",
+    conseil:
+      "Pousse dans les talons, serre fort les fessiers 1 s en haut. Très efficace et très doux pour les articulations.",
+  },
+  "dead-bug": {
+    id: "dead-bug",
+    nom: "Dead bug",
+    zone: "Gainage",
+    series: 3,
+    reps: "8 / côté",
+    repos: 60,
+    sansCharge: true,
+    charge: { esteban: "Bras et jambe opposés tendus", valerie: "Amplitude réduite au départ" },
+    variante: "Trop facile ? Ralentis encore le mouvement.",
+    conseil: "Bas du dos plaqué au sol du début à la fin. Souffle en allongeant bras et jambe.",
+  },
+  "souleve-roumain": {
+    id: "souleve-roumain",
+    nom: "Soulevé de terre roumain, haltères",
+    zone: "Jambes",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
+    variante: "Ou leg curl si le geste n’est pas encore à l’aise.",
+    conseil:
+      "Pousse les hanches vers l’arrière, dos plat, haltères qui glissent le long des cuisses. Tu dois sentir l’arrière des jambes, jamais le bas du dos.",
+  },
+  pompes: {
+    id: "pompes",
+    nom: "Pompes mains surélevées",
+    zone: "Poussée",
+    series: 3,
+    reps: "8–12",
+    repos: 90,
+    sansCharge: true,
+    charge: {
+      esteban: "Mains sur un banc bas, ou au sol",
+      valerie: "Mains sur une barre haute (cadre guidé)",
+    },
+    variante: "Ou développé poitrine avec haltères.",
+    conseil:
+      "Corps gainé comme une planche. Pour progresser : baisse le support petit à petit, semaine après semaine.",
+  },
+  "tirage-horizontal": {
+    id: "tirage-horizontal",
+    nom: "Tirage horizontal à la poulie",
+    zone: "Tirage",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 25–35 kg", valerie: "Départ conseillé : 12–17 kg" },
+    variante: "Ou rowing un bras avec haltère, genou sur le banc.",
+    conseil: "Buste droit et stable, tire la poignée vers le nombril sans te balancer.",
+  },
+  "leg-extension": {
+    id: "leg-extension",
+    nom: "Leg extension",
+    zone: "Jambes",
+    series: 2,
+    reps: "15",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
+    variante: "Réglage : le coussin repose juste au-dessus des chevilles.",
+    conseil: "Monte en 1 seconde, redescends en 3. Léger et propre plutôt que lourd et saccadé.",
+  },
+  "planche-laterale": {
+    id: "planche-laterale",
+    nom: "Planche latérale",
+    zone: "Gainage",
+    series: 2,
+    reps: "15–25 s / côté",
+    repos: 60,
+    sansCharge: true,
+    charge: { esteban: "Sur l’avant-bras, pieds empilés", valerie: "Genoux posés — version parfaite pour démarrer" },
+    variante: "Trop facile ? Lève le bras libre vers le plafond.",
+    conseil: "Hanches hautes, corps en ligne droite des épaules aux pieds (ou aux genoux).",
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Les deux programmes                                                 */
+/* ------------------------------------------------------------------ */
+
 const ECHAUFFEMENT = {
-  duree: { esteban: "5 à 7 min", maman: "8 à 10 min" },
+  duree: { esteban: "5 à 7 min", valerie: "8 à 10 min" },
   mobilite: [
     "10 grands cercles de bras (avant puis arrière)",
     "10 rotations du buste, mains sur les hanches",
@@ -125,229 +333,114 @@ const ECHAUFFEMENT = {
 const RETOUR_AU_CALME =
   "3 min de marche très lente pour redescendre, puis 30 s d’étirement doux par groupe : quadriceps, ischios, fessiers, poitrine, dos. Respire profondément — cette séance, personne ne pourra te l’enlever.";
 
-const SEANCES = [
-  {
-    id: "A",
-    nom: "Fondations",
-    resume: "Presse · Développé poitrine · Tirage vertical",
-    exos: [
+const PROGRAMMES = {
+  fullbody: {
+    nom: "Full body",
+    description:
+      "Tout le corps à chaque séance. Le format le plus efficace pour débuter et perdre du gras : chaque muscle travaille 3 fois par semaine.",
+    seances: [
       {
-        id: "presse",
-        nom: "Presse à cuisses",
-        zone: "Jambes",
-        series: 3,
-        reps: "12",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 40–60 kg", maman: "Départ conseillé : 15–25 kg" },
-        variante: "Poids libres : goblet squat avec un haltère.",
-        conseil:
-          "Pieds à largeur d’épaules, descends jusqu’à 90° et pousse sans jamais verrouiller les genoux.",
-      },
-      {
-        id: "dev-poitrine",
-        nom: "Développé poitrine assis",
-        zone: "Poussée",
-        series: 3,
-        reps: "10",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 20–30 kg", maman: "Départ conseillé : 7,5–12,5 kg" },
-        variante: "Poids libres : développé haltères sur banc.",
-        conseil:
-          "Omoplates serrées contre le dossier, pousse en expirant, redescends en 2 secondes.",
-      },
-      {
-        id: "tirage-vertical",
-        nom: "Tirage vertical",
-        zone: "Tirage",
-        series: 3,
-        reps: "10",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 30–40 kg", maman: "Départ conseillé : 15–20 kg" },
-        variante: "Machine à tractions assistées si disponible.",
-        conseil:
-          "Tire la barre vers le haut de la poitrine, coudes vers le bas — pas derrière la nuque.",
-      },
-      {
-        id: "leg-curl",
-        nom: "Leg curl assis",
-        zone: "Jambes",
-        series: 2,
-        reps: "12",
-        repos: 60,
-        charge: { esteban: "Départ conseillé : 25–35 kg", maman: "Départ conseillé : 10–15 kg" },
-        variante: "Version allongée selon les machines de la salle.",
-        conseil: "Fléchis en 1 seconde, retiens la remontée en 3 secondes. Les ischios adorent la lenteur.",
-      },
-      {
-        id: "planche",
-        nom: "Planche",
-        zone: "Gainage",
-        series: 3,
-        reps: "20–40 s",
-        repos: 60,
-        sansCharge: true,
-        charge: { esteban: "Sur les avant-bras, corps aligné", maman: "Sur les genoux au départ — parfait aussi" },
-        variante: "Trop facile ? Décolle un pied 5 s de chaque côté.",
-        conseil: "Serre les fessiers et le ventre, ne laisse pas le bas du dos se creuser.",
-      },
-    ],
-    cardio: {
-      esteban:
-        "Tapis : 15–20 min de marche rapide inclinée (5–8 %, 5,5–6,5 km/h). Option intervalles doux : 6 × (1 min tonique / 1 min tranquille).",
-      maman:
-        "Vélo ou elliptique : 15–20 min à allure modérée — tu dois pouvoir parler, pas chanter. Zéro impact pour les genoux.",
-    },
-  },
-  {
-    id: "B",
-    nom: "Force tranquille",
-    resume: "Goblet squat · Épaules · Rowing",
-    exos: [
-      {
-        id: "goblet",
-        nom: "Goblet squat",
-        zone: "Jambes",
-        series: 3,
-        reps: "12",
-        repos: 90,
-        charge: { esteban: "Haltère de 10–16 kg", maman: "Haltère de 4–8 kg" },
-        variante: "Genoux sensibles ce jour-là ? Repasse sur la presse à cuisses.",
-        conseil:
-          "Haltère serré contre la poitrine, dos droit, talons au sol. Descends comme pour t’asseoir.",
-      },
-      {
-        id: "dev-epaules",
-        nom: "Développé épaules assis",
-        zone: "Poussée",
-        series: 3,
-        reps: "10",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 15–20 kg", maman: "Départ conseillé : 5–10 kg" },
-        variante: "Poids libres : développé avec deux haltères légers.",
-        conseil: "Ne hausse pas les épaules vers les oreilles ; le mouvement reste fluide, sans à-coups.",
-      },
-      {
-        id: "rowing",
-        nom: "Rowing assis machine",
-        zone: "Tirage",
-        series: 3,
-        reps: "12",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 30–40 kg", maman: "Départ conseillé : 15–20 kg" },
-        variante: "Ou tirage horizontal à la poulie basse.",
-        conseil:
-          "Poitrine contre le support, tire les coudes vers l’arrière et serre les omoplates 1 seconde.",
-      },
-      {
-        id: "hip-thrust",
-        nom: "Pont fessier (hip thrust)",
-        zone: "Jambes",
-        series: 3,
-        reps: "15",
-        repos: 60,
-        charge: {
-          esteban: "Haltère ou disque de 10–20 kg sur les hanches",
-          maman: "Poids du corps, puis 5–10 kg quand c’est facile",
+        id: "A",
+        badge: "A",
+        titre: "Séance A — Fondations",
+        sousTitre: "tout le corps",
+        resume: "Presse · Développé poitrine · Tirage vertical",
+        exos: [EXOS.presse, EXOS["dev-poitrine"], EXOS["tirage-vertical"], EXOS["leg-curl"], EXOS.planche],
+        cardio: {
+          esteban:
+            "Tapis : 15–20 min de marche rapide inclinée (5–8 %, 5,5–6,5 km/h). Option intervalles doux : 6 × (1 min tonique / 1 min tranquille).",
+          valerie:
+            "Vélo ou elliptique : 15–20 min à allure modérée — tu dois pouvoir parler, pas chanter. Zéro impact pour les genoux.",
         },
-        variante: "Machine hip thrust si ta salle en a une.",
-        conseil:
-          "Pousse dans les talons, serre fort les fessiers 1 s en haut. Très efficace et très doux pour les articulations.",
       },
       {
-        id: "dead-bug",
-        nom: "Dead bug",
-        zone: "Gainage",
-        series: 3,
-        reps: "8 / côté",
-        repos: 60,
-        sansCharge: true,
-        charge: { esteban: "Bras et jambe opposés tendus", maman: "Amplitude réduite au départ" },
-        variante: "Trop facile ? Ralentis encore le mouvement.",
-        conseil: "Bas du dos plaqué au sol du début à la fin. Souffle en allongeant bras et jambe.",
-      },
-    ],
-    cardio: {
-      esteban:
-        "Elliptique : 15–20 min, résistance moyenne. Option : monte la résistance d’un cran 1 min sur 3.",
-      maman: "Elliptique : 15 min tranquilles, résistance légère. Aucun impact, que du bénéfice.",
-    },
-  },
-  {
-    id: "C",
-    nom: "Énergie",
-    resume: "Soulevé roumain · Pompes · Tirage horizontal",
-    exos: [
-      {
-        id: "souleve-roumain",
-        nom: "Soulevé de terre roumain, haltères",
-        zone: "Jambes",
-        series: 3,
-        reps: "12",
-        repos: 90,
-        charge: { esteban: "2 haltères de 10–14 kg", maman: "2 haltères de 4–6 kg" },
-        variante: "Ou leg curl si le geste n’est pas encore à l’aise.",
-        conseil:
-          "Pousse les hanches vers l’arrière, dos plat, haltères qui glissent le long des cuisses. Tu dois sentir l’arrière des jambes, jamais le bas du dos.",
-      },
-      {
-        id: "pompes",
-        nom: "Pompes mains surélevées",
-        zone: "Poussée",
-        series: 3,
-        reps: "8–12",
-        repos: 90,
-        sansCharge: true,
-        charge: {
-          esteban: "Mains sur un banc bas, ou au sol",
-          maman: "Mains sur une barre haute (cadre guidé)",
+        id: "B",
+        badge: "B",
+        titre: "Séance B — Force tranquille",
+        sousTitre: "tout le corps",
+        resume: "Goblet squat · Épaules · Rowing",
+        exos: [EXOS.goblet, EXOS["dev-epaules"], EXOS.rowing, EXOS["hip-thrust"], EXOS["dead-bug"]],
+        cardio: {
+          esteban:
+            "Elliptique : 15–20 min, résistance moyenne. Option : monte la résistance d’un cran 1 min sur 3.",
+          valerie: "Elliptique : 15 min tranquilles, résistance légère. Aucun impact, que du bénéfice.",
         },
-        variante: "Ou développé poitrine avec haltères.",
-        conseil:
-          "Corps gainé comme une planche. Pour progresser : baisse le support petit à petit, semaine après semaine.",
       },
       {
-        id: "tirage-horizontal",
-        nom: "Tirage horizontal à la poulie",
-        zone: "Tirage",
-        series: 3,
-        reps: "12",
-        repos: 90,
-        charge: { esteban: "Départ conseillé : 25–35 kg", maman: "Départ conseillé : 12–17 kg" },
-        variante: "Ou rowing un bras avec haltère, genou sur le banc.",
-        conseil: "Buste droit et stable, tire la poignée vers le nombril sans te balancer.",
-      },
-      {
-        id: "leg-extension",
-        nom: "Leg extension",
-        zone: "Jambes",
-        series: 2,
-        reps: "15",
-        repos: 60,
-        charge: { esteban: "Départ conseillé : 20–30 kg", maman: "Départ conseillé : 10–15 kg" },
-        variante: "Réglage : le coussin repose juste au-dessus des chevilles.",
-        conseil: "Monte en 1 seconde, redescends en 3. Léger et propre plutôt que lourd et saccadé.",
-      },
-      {
-        id: "planche-laterale",
-        nom: "Planche latérale",
-        zone: "Gainage",
-        series: 2,
-        reps: "15–25 s / côté",
-        repos: 60,
-        sansCharge: true,
-        charge: { esteban: "Sur l’avant-bras, pieds empilés", maman: "Genoux posés — version parfaite pour démarrer" },
-        variante: "Trop facile ? Lève le bras libre vers le plafond.",
-        conseil: "Hanches hautes, corps en ligne droite des épaules aux pieds (ou aux genoux).",
+        id: "C",
+        badge: "C",
+        titre: "Séance C — Énergie",
+        sousTitre: "tout le corps",
+        resume: "Soulevé roumain · Pompes · Tirage horizontal",
+        exos: [
+          EXOS["souleve-roumain"], EXOS.pompes, EXOS["tirage-horizontal"],
+          EXOS["leg-extension"], EXOS["planche-laterale"],
+        ],
+        cardio: {
+          esteban:
+            "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min, puis redescends sur les 3 dernières.",
+          valerie:
+            "Vélo : 15–20 min, allure régulière. Règle la selle : jambe presque tendue quand la pédale est en bas.",
+        },
       },
     ],
-    cardio: {
-      esteban:
-        "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min, puis redescends sur les 3 dernières.",
-      maman:
-        "Vélo : 15–20 min, allure régulière. Règle la selle : jambe presque tendue quand la pédale est en bas.",
-    },
   },
-];
+  split: {
+    nom: "Haut / Bas",
+    description:
+      "Jour 1 haut du corps, jour 2 bas du corps, jour 3 corps entier. Plus de volume par zone à chaque séance — garde au moins un jour de repos entre deux.",
+    seances: [
+      {
+        id: "sH",
+        badge: "1",
+        titre: "Jour 1 — Haut du corps",
+        sousTitre: "haut du corps",
+        resume: "Développé poitrine · Tirage vertical · Épaules",
+        exos: [
+          EXOS["dev-poitrine"], EXOS["tirage-vertical"], EXOS["dev-epaules"],
+          EXOS.rowing, EXOS.planche,
+        ],
+        cardio: {
+          esteban:
+            "Tapis : 15–20 min de marche inclinée — les jambes sont fraîches, profites-en. Option : 6 × (1 min tonique / 1 min tranquille).",
+          valerie: "Vélo ou elliptique : 15–20 min à allure modérée, zéro impact.",
+        },
+      },
+      {
+        id: "sB",
+        badge: "2",
+        titre: "Jour 2 — Bas du corps",
+        sousTitre: "bas du corps",
+        resume: "Presse · Leg curl · Hip thrust",
+        exos: [
+          EXOS.presse, EXOS["leg-curl"], EXOS["leg-extension"],
+          EXOS["hip-thrust"], EXOS["dead-bug"],
+        ],
+        cardio: {
+          esteban: "Elliptique : 15 min tranquilles — les jambes ont déjà bien travaillé aujourd’hui.",
+          valerie: "Elliptique : 12–15 min très douces, résistance légère.",
+        },
+      },
+      {
+        id: "sX",
+        badge: "3",
+        titre: "Jour 3 — Corps entier",
+        sousTitre: "corps entier",
+        resume: "Goblet squat · Soulevé roumain · Tirage",
+        exos: [
+          EXOS.goblet, EXOS["souleve-roumain"], EXOS.pompes,
+          EXOS["tirage-horizontal"], EXOS["planche-laterale"],
+        ],
+        cardio: {
+          esteban: "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min.",
+          valerie: "Vélo : 15–20 min, selle bien réglée : jambe presque tendue quand la pédale est en bas.",
+        },
+      },
+    ],
+  },
+};
+
+const TOUTES_SEANCES = [...PROGRAMMES.fullbody.seances, ...PROGRAMMES.split.seances];
 
 const MESSAGES_FETE = [
   "La régularité bat le talent. Et toi, tu es là.",
@@ -391,12 +484,21 @@ const CONSEILS = [
     ],
   },
   {
+    id: "modes",
+    icone: Dumbbell,
+    titre: "Full body ou Haut / Bas ?",
+    texte: [
+      "Full body : chaque muscle travaille 3 fois par semaine — c’est le format le plus efficace pour débuter, apprendre les gestes et perdre du gras. Reste dessus au moins 4 à 6 semaines.",
+      "Haut / Bas : plus de volume par zone et des séances plus ciblées — agréable quand le full body devient routinier. Les charges que tu as notées te suivent d’un mode à l’autre : ce sont les mêmes exercices, réorganisés. Dans les deux cas, 3 séances par semaine avec un jour de repos entre deux.",
+    ],
+  },
+  {
     id: "progression",
     icone: TrendingUp,
     titre: "Progresser sans se presser",
     texte: [
       "Semaines 1–2 : on apprend les gestes, 2 séries, charges légères. Semaines 3–4 : on passe à 3 séries. Ensuite, la surcharge progressive : quand tu atteins le haut de la fourchette de répétitions sur toutes les séries, deux séances de suite, augmente la charge.",
-      "Esteban : +2,5 kg sur le haut du corps, +5 kg sur la presse. Maman : +1 à +2,5 kg, et prends une semaine de plus sur un palier si les articulations le demandent. Note tes charges dans l’app après chaque exercice : c’est ta courbe de progression sur 8 à 12 semaines.",
+      "Esteban : +2,5 kg sur le haut du corps, +5 kg sur la presse. Valérie : +1 à +2,5 kg, et prends une semaine de plus sur un palier si les articulations le demandent. Note tes charges dans l’app après chaque exercice : c’est ta courbe de progression sur 8 à 12 semaines.",
     ],
   },
   {
@@ -493,7 +595,7 @@ function Barres({ barres }) {
             <div className="w-full flex items-end" style={{ height: 44 }}>
               <div
                 className={`w-full rounded-t barre ${b.n > 0 ? "bg-accent" : "bg-carte2"}`}
-                style={{ height: b.n > 0 ? `${(b.n / 3) * 100}%` : 5 }}
+                style={{ height: b.n > 0 ? `${(Math.min(b.n, 3) / 3) * 100}%` : 5 }}
               />
             </div>
             <span className="text-brume chiffres" style={{ fontSize: 10 }}>
@@ -538,13 +640,15 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
 /* ------------------------------------------------------------------ */
 
 function etatVide() {
-  return { seances: { A: {}, B: {}, C: {} }, charges: {}, historique: [] };
+  const seances = {};
+  for (const s of TOUTES_SEANCES) seances[s.id] = {};
+  return { seances, charges: {}, historique: [], mode: "fullbody", mesures: { age: "", taille: "", poids: "" } };
 }
 
 export default function App() {
   const [profil, setProfil] = useState("esteban");
   const [chargement, setChargement] = useState(true);
-  const [store, setStore] = useState({ esteban: etatVide(), maman: etatVide() });
+  const [store, setStore] = useState({ esteban: etatVide(), valerie: etatVide() });
   const [onglet, setOnglet] = useState("semaine");
   const [ouverte, setOuverte] = useState(null); // id de séance ou null
   const [minuteur, setMinuteur] = useState(null); // {total, restant, label}
@@ -555,24 +659,32 @@ export default function App() {
     let vivant = true;
     (async () => {
       const res = {};
-      for (const p of ["esteban", "maman"]) {
-        const [a, b, c, ch, ass] = await Promise.all([
-          lire(`${p}:seance:A`),
-          lire(`${p}:seance:B`),
-          lire(`${p}:seance:C`),
-          lire(`${p}:charges`),
-          lire(`${p}:assiduite`),
+      for (const p of ["esteban", "valerie"]) {
+        const seances = {};
+        await Promise.all(
+          TOUTES_SEANCES.map(async (s) => {
+            seances[s.id] = (await lireProfil(p, `seance:${s.id}`)) || {};
+          })
+        );
+        const [ch, ass, mode, mesures] = await Promise.all([
+          lireProfil(p, "charges"),
+          lireProfil(p, "assiduite"),
+          lireProfil(p, "mode"),
+          lireProfil(p, "mesures"),
         ]);
         res[p] = {
-          seances: { A: a || {}, B: b || {}, C: c || {} },
+          seances,
           charges: ch || {},
           historique: (ass && ass.historique) || [],
+          mode: mode === "split" ? "split" : "fullbody",
+          mesures: { ...MESURES_DEFAUT[p], ...(mesures || {}) },
         };
       }
-      const pSauve = await lire("app:profil");
+      let pSauve = await lire("app:profil");
+      if (pSauve === "maman") pSauve = "valerie";
       if (!vivant) return;
       setStore(res);
-      if (pSauve === "maman" || pSauve === "esteban") setProfil(pSauve);
+      if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
       setChargement(false);
     })();
     return () => { vivant = false; };
@@ -611,7 +723,7 @@ export default function App() {
   function basculerEtape(sid, eid) {
     setStore((prev) => {
       const p = prev[profil];
-      const checks = { ...p.seances[sid], [eid]: !p.seances[sid][eid] };
+      const checks = { ...(p.seances[sid] || {}), [eid]: !(p.seances[sid] || {})[eid] };
       ecrire(`${profil}:seance:${sid}`, checks);
       return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: checks } } };
     });
@@ -623,6 +735,23 @@ export default function App() {
       const charges = { ...p.charges, [exoId]: valeur };
       ecrire(`${profil}:charges`, charges);
       return { ...prev, [profil]: { ...p, charges } };
+    });
+  }
+
+  function noterMesure(champ, valeur) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const mesures = { ...p.mesures, [champ]: valeur };
+      ecrire(`${profil}:mesures`, mesures);
+      return { ...prev, [profil]: { ...p, mesures } };
+    });
+  }
+
+  function choisirMode(m) {
+    setStore((prev) => {
+      const p = prev[profil];
+      ecrire(`${profil}:mode`, m);
+      return { ...prev, [profil]: { ...p, mode: m } };
     });
   }
 
@@ -671,7 +800,7 @@ export default function App() {
     );
   }
 
-  const seanceOuverte = SEANCES.find((s) => s.id === ouverte) || null;
+  const seanceOuverte = TOUTES_SEANCES.find((s) => s.id === ouverte) || null;
 
   return (
     <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta">
@@ -685,7 +814,7 @@ export default function App() {
             </span>
             <div>
               <h1 className="text-lg font-extrabold leading-none tracking-tight">Coachwork</h1>
-              <p className="text-brume text-xs mt-0.5">Full-body · 3 séances / semaine</p>
+              <p className="text-brume text-xs mt-0.5">3 séances / semaine, à deux</p>
             </div>
           </div>
 
@@ -720,10 +849,9 @@ export default function App() {
         {/* ---------- vue séance détaillée ---------- */}
         {seanceOuverte ? (
           <VueSeance
-            cle={`${profil}-${seanceOuverte.id}`}
             seance={seanceOuverte}
             profil={profil}
-            checks={donnees.seances[seanceOuverte.id]}
+            checks={donnees.seances[seanceOuverte.id] || {}}
             charges={donnees.charges}
             surRetour={() => setOuverte(null)}
             surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
@@ -750,11 +878,12 @@ export default function App() {
 
             {onglet === "semaine" ? (
               <VueSemaine
-                cle={profil}
                 profil={profil}
                 stats={stats}
                 donnees={donnees}
                 surOuvrir={setOuverte}
+                surMode={choisirMode}
+                surMesure={noterMesure}
               />
             ) : (
               <div key={`conseils-${profil}`} className="vue space-y-3">
@@ -764,11 +893,11 @@ export default function App() {
                     icone={c.icone}
                     titre={c.titre}
                     texte={c.texte}
-                    accent={profil === "maman" && c.id === "cinquante-quatre"}
+                    accent={profil === "valerie" && c.id === "cinquante-quatre"}
                   />
                 ))}
                 <p className="text-brume text-center text-xs pt-2 leading-relaxed">
-                  Ce programme ne remplace pas un avis médical.<br />Fait avec soin pour Esteban & Maman.
+                  Ce programme ne remplace pas un avis médical.<br />Fait avec soin pour Esteban & Valérie.
                 </p>
               </div>
             )}
@@ -836,7 +965,7 @@ export default function App() {
               <Flame size={38} className="text-accent" />
             </span>
             <h2 className="mt-5 text-2xl font-extrabold tracking-tight">
-              Séance {fete.s} validée !
+              Séance validée !
             </h2>
             <p className="mt-2 text-douce text-sm leading-relaxed">
               {fete.deja
@@ -864,8 +993,9 @@ export default function App() {
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
 
-function VueSemaine({ profil, stats, donnees, surOuvrir }) {
+function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
   const p = PROFILS[profil];
+  const programme = PROGRAMMES[donnees.mode];
   const dateFr = new Intl.DateTimeFormat("fr-FR", {
     weekday: "long", day: "numeric", month: "long",
   }).format(new Date());
@@ -883,7 +1013,7 @@ function VueSemaine({ profil, stats, donnees, surOuvrir }) {
       {/* assiduité */}
       <section className="rounded-3xl bg-carte border border-ligne p-5">
         <div className="flex items-center gap-5">
-          <Anneau fait={stats.cetteSemaine.size} total={3} />
+          <Anneau fait={Math.min(stats.cetteSemaine.size, 3)} total={3} />
           <div className="flex-1 space-y-3">
             <div className="flex items-center gap-3">
               <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
@@ -912,15 +1042,36 @@ function VueSemaine({ profil, stats, donnees, surOuvrir }) {
         </div>
       </section>
 
+      {/* type d'entraînement */}
+      <section>
+        <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
+          Mon type d’entraînement
+        </h3>
+        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-carte p-1 border border-ligne">
+          {Object.entries(PROGRAMMES).map(([id, prog]) => (
+            <button
+              key={id}
+              onClick={() => surMode(id)}
+              className={`h-11 rounded-xl text-sm font-bold transi ${
+                donnees.mode === id ? "bg-accent text-accent-ink" : "text-brume"
+              }`}
+            >
+              {prog.nom}
+            </button>
+          ))}
+        </div>
+        <p className="text-brume text-xs mt-2 leading-relaxed">{programme.description}</p>
+      </section>
+
       {/* séances */}
       <section>
         <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
           Mes 3 séances de la semaine
         </h3>
         <div className="space-y-3">
-          {SEANCES.map((s) => {
+          {programme.seances.map((s) => {
             const faite = stats.cetteSemaine.has(s.id);
-            const nChecks = Object.values(donnees.seances[s.id]).filter(Boolean).length;
+            const nChecks = Object.values(donnees.seances[s.id] || {}).filter(Boolean).length;
             const enCours = !faite && nChecks > 0;
             return (
               <button
@@ -933,12 +1084,10 @@ function VueSemaine({ profil, stats, donnees, surOuvrir }) {
                     faite ? "bg-accent text-accent-ink" : "bg-accent-soft text-accent"
                   }`}
                 >
-                  {faite ? <Check size={26} strokeWidth={3} /> : s.id}
+                  {faite ? <Check size={26} strokeWidth={3} /> : s.badge}
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="font-bold text-base block">
-                    Séance {s.id} — {s.nom}
-                  </span>
+                  <span className="font-bold text-base block">{s.titre}</span>
                   <span className="text-brume text-xs block truncate mt-0.5">{s.resume}</span>
                 </span>
                 <span
@@ -957,13 +1106,52 @@ function VueSemaine({ profil, stats, donnees, surOuvrir }) {
           })}
         </div>
         <p className="text-brume text-xs mt-3 leading-relaxed">
-          L’ordre est libre : A, B puis C dans la semaine, avec au moins un jour de repos entre deux.
+          L’ordre est libre, avec au moins un jour de repos entre deux séances.
           Chaque séance dure 45 à 60 min.
         </p>
       </section>
 
+      {/* mesures */}
+      <section className="rounded-3xl bg-carte border border-ligne p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
+            <Ruler size={19} className="text-accent transi" />
+          </span>
+          <div>
+            <h3 className="font-bold text-base leading-none">Mes repères</h3>
+            <p className="text-brume text-xs mt-1">Ajustables quand tu veux</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[["age", "Âge", "ans"], ["taille", "Taille", "cm"], ["poids", "Poids", "kg"]].map(
+            ([champ, etiquette, unite]) => (
+              <label key={champ} className="block">
+                <span className="text-xs text-brume block mb-1.5">{etiquette}</span>
+                <span className="flex items-baseline gap-1 rounded-xl bg-carte2 px-3" style={{ height: 48 }}>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={donnees.mesures[champ] || ""}
+                    onChange={(e) => surMesure(champ, e.target.value)}
+                    placeholder="—"
+                    className="w-full min-w-0 bg-transparent text-center font-extrabold chiffres text-base outline-none placeholder-slate-600"
+                    style={{ height: 46 }}
+                    aria-label={`${etiquette} (${unite})`}
+                  />
+                  <span className="text-xs text-brume shrink-0">{unite}</span>
+                </span>
+              </label>
+            )
+          )}
+        </div>
+        <p className="text-brume text-xs mt-3 leading-relaxed">
+          Le poids n’est qu’un repère parmi d’autres — les séances faites et les charges qui
+          montent racontent mieux l’histoire.
+        </p>
+      </section>
+
       {/* note dédiée */}
-      {profil === "maman" ? (
+      {profil === "valerie" ? (
         <section className="rounded-2xl bg-carte border bordure-accent-douce p-4 flex gap-3">
           <HeartPulse size={20} className="text-accent shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed text-douce">
@@ -999,10 +1187,10 @@ function VueSemaine({ profil, stats, donnees, surOuvrir }) {
 
 function VueSeance({ seance, profil, checks, charges, surRetour, surCoche, surCharge, surRepos, surFin }) {
   const etapes = [
-    { id: "echauffement", type: "simple" },
-    ...seance.exos.map((e) => ({ id: e.id, type: "exo", exo: e })),
-    { id: "cardio", type: "simple" },
-    { id: "retour", type: "simple" },
+    { id: "echauffement" },
+    ...seance.exos.map((e) => ({ id: e.id })),
+    { id: "cardio" },
+    { id: "retour" },
   ];
   const nFait = etapes.filter((e) => checks[e.id]).length;
   const tout = nFait === etapes.length;
@@ -1019,10 +1207,8 @@ function VueSeance({ seance, profil, checks, charges, surRetour, surCoche, surCh
           <ChevronLeft size={22} />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-extrabold tracking-tight leading-tight">
-            Séance {seance.id} — {seance.nom}
-          </h2>
-          <p className="text-brume text-xs mt-0.5">45–60 min · tout le corps</p>
+          <h2 className="text-xl font-extrabold tracking-tight leading-tight">{seance.titre}</h2>
+          <p className="text-brume text-xs mt-0.5">45–60 min · {seance.sousTitre}</p>
         </div>
       </div>
 
@@ -1062,6 +1248,7 @@ function VueSeance({ seance, profil, checks, charges, surRetour, surCoche, surCh
           <CarteExo
             key={exo.id}
             numero={i + 1}
+            total={seance.exos.length}
             exo={exo}
             profil={profil}
             coche={!!checks[exo.id]}
@@ -1126,7 +1313,7 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
   );
 }
 
-function CarteExo({ numero, exo, profil, coche, poids, surCoche, surPoids, surRepos }) {
+function CarteExo({ numero, total, exo, profil, coche, poids, surCoche, surPoids, surRepos }) {
   return (
     <div className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}>
       <div className="flex items-start gap-3">
@@ -1135,7 +1322,7 @@ function CarteExo({ numero, exo, profil, coche, poids, surCoche, surPoids, surRe
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-accent-soft text-accent transi">
               {exo.zone}
             </span>
-            <span className="text-brume text-xs chiffres">Exo {numero}/5</span>
+            <span className="text-brume text-xs chiffres">Exo {numero}/{total}</span>
           </div>
           <h3 className="font-bold text-base mt-1.5 leading-snug">{exo.nom}</h3>
           <p className="text-sm mt-1 chiffres">

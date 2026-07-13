@@ -9,7 +9,7 @@
   --accent-soft: rgba(163, 230, 53, 0.13);
   --accent-bordure: rgba(163, 230, 53, 0.35);
 }
-[data-profil="maman"] {
+[data-profil="valerie"] {
   --accent: #fb7185;
   --accent-ink: #2b070d;
   --accent-soft: rgba(251, 113, 133, 0.14);

@@ -1,6 +1,6 @@
 # Coachwork 💪
 
-Programme d'entraînement full-body 3 séances/semaine pour Esteban & Maman — suivi des séances, des charges et de l'assiduité. Mobile-first, en français.
+Programme d'entraînement 3 séances/semaine pour Esteban & Valérie — deux modes (full body ou haut/bas), suivi des séances, des charges, des mesures et de l'assiduité. Mobile-first, en français.
 
 ## Développement
 
