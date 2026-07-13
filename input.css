@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- thème & accents par profil ---------- */
+:root {
+  --accent: #a3e635;
+  --accent-ink: #131a05;
+  --accent-soft: rgba(163, 230, 53, 0.13);
+  --accent-bordure: rgba(163, 230, 53, 0.35);
+}
+[data-profil="maman"] {
+  --accent: #fb7185;
+  --accent-ink: #2b070d;
+  --accent-soft: rgba(251, 113, 133, 0.14);
+  --accent-bordure: rgba(251, 113, 133, 0.4);
+}
+
+html {
+  background: #0b0f14;
+}
+body {
+  background: #0b0f14;
+  color: #e9eef4;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bg-accent { background-color: var(--accent); }
+.text-accent { color: var(--accent); }
+.text-accent-ink { color: var(--accent-ink); }
+.bg-accent-soft { background-color: var(--accent-soft); }
+.stroke-accent { stroke: var(--accent); }
+.stroke-carte2 { stroke: #212a36; }
+.bordure-accent-douce { border-color: var(--accent-bordure); }
+.encre-sur-accent { background-color: var(--accent-ink); color: var(--accent); }
+
+.chiffres { font-variant-numeric: tabular-nums; }
+
+/* ---------- transitions & animations ---------- */
+.transi {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    transform 0.15s ease, opacity 0.2s ease, stroke 0.2s ease;
+}
+
+.anneau {
+  transition: stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.2s ease;
+}
+
+.barre {
+  transition: width 0.4s ease, height 0.5s ease, background-color 0.2s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.pop { animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@keyframes apparait {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.vue { animation: apparait 0.25s ease-out both; }
+
+@keyframes surgit {
+  from { opacity: 0; transform: scale(0.88) translateY(14px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.surgit { animation: surgit 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+
+@keyframes voile {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.voile {
+  background: rgba(4, 7, 10, 0.78);
+  backdrop-filter: blur(6px);
+  animation: voile 0.2s ease-out both;
+}
+
+@keyframes pulsation {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.92); }
+}
+.pulsation { animation: pulsation 1.3s ease-in-out infinite; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
