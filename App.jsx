@@ -87,12 +87,20 @@ async function ecrireBrut(cle, valeur) {
 
 const API_SYNC = "/api/etat";
 /* Clés propres à l'appareil : jamais synchronisées */
-const CLES_LOCALES = new Set(["app:profil", "app:horodatages"]);
+const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code"]);
 
 let horodatages = {};
 let syncDisponible = false;
+let codeApp = null; // code d'accès, gardé sur l'appareil uniquement
 const enAttente = new Map();
 let minuteriePoussee = null;
+
+function entetesSync(avecJson) {
+  const h = {};
+  if (avecJson) h["Content-Type"] = "application/json";
+  if (codeApp) h["X-Code"] = codeApp;
+  return h;
+}
 
 function programmerPoussee() {
   if (minuteriePoussee) return;
@@ -104,7 +112,7 @@ function programmerPoussee() {
     try {
       const r = await fetch(API_SYNC, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: entetesSync(true),
         body: JSON.stringify({ entrees }),
       });
       if (!r.ok) throw new Error("poussée refusée");
@@ -131,12 +139,14 @@ async function ecrire(cle, valeur) {
 }
 
 /* Récupère l'état distant et adopte les clés plus récentes.
-   Retourne true si quelque chose a changé localement. */
+   Retourne "code" (code d'accès requis), "off" (pas de base),
+   "maj" (des données ont été adoptées) ou "ok". */
 async function tirerDepuisServeur() {
-  const r = await fetch(API_SYNC, { signal: AbortSignal.timeout(6000) });
+  const r = await fetch(API_SYNC, { signal: AbortSignal.timeout(6000), headers: entetesSync(false) });
+  if (r.status === 401) return "code";
   if (!r.ok) throw new Error("api indisponible");
   const j = await r.json();
-  if (!j.sync) return null;
+  if (!j.sync) return "off";
   syncDisponible = true;
   let adopte = false;
   const aPousser = [];
@@ -162,7 +172,7 @@ async function tirerDepuisServeur() {
     for (const e of aPousser) enAttente.set(e.cle, e);
     programmerPoussee();
   }
-  return adopte;
+  return adopte ? "maj" : "ok";
 }
 
 /* Migration : l'ancien profil « maman » devient « valerie » */
@@ -216,9 +226,13 @@ const PROFILS = {
 };
 
 const MESURES_DEFAUT = {
-  esteban: { age: "29", taille: "170", poids: "79" },
-  valerie: { age: "54", taille: "154", poids: "65" },
+  esteban: { nom: "Esteban", age: "29", taille: "170", poids: "79" },
+  valerie: { nom: "Valérie", age: "54", taille: "154", poids: "65" },
 };
+
+function nomAffiche(donneesProfil, id) {
+  return ((donneesProfil.mesures.nom || "").trim()) || PROFILS[id].nom;
+}
 
 /* ------------------------------------------------------------------ */
 /* Les exercices (partagés entre tous les programmes : la charge       */
@@ -804,6 +818,52 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
   );
 }
 
+/* Écran de verrouillage — code d'accès */
+function EcranVerrou({ profil, erreur, occupe, surValider }) {
+  const [code, setCode] = useState("");
+  return (
+    <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta flex items-center justify-center px-6">
+      <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-8 text-center vue">
+        <span className="mx-auto h-16 w-16 rounded-2xl bg-accent flex items-center justify-center">
+          <Dumbbell size={30} className="text-accent-ink" strokeWidth={2.5} />
+        </span>
+        <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Coachwork</h1>
+        <p className="text-brume text-sm mt-2 leading-relaxed">
+          Cette app est protégée. Entre le code d’accès pour continuer.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (code.trim() && !occupe) surValider(code.trim());
+          }}
+        >
+          <input
+            type="password"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Code d’accès"
+            autoComplete="off"
+            className="mt-5 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold text-lg outline-none placeholder-slate-600 chiffres"
+            style={{ height: 56 }}
+            aria-label="Code d’accès"
+          />
+          {erreur && <p className="text-rouge text-xs mt-3">{erreur}</p>}
+          <button
+            type="submit"
+            disabled={occupe || !code.trim()}
+            className={`mt-4 w-full rounded-2xl font-extrabold text-base transi ${
+              occupe || !code.trim() ? "bg-carte2 text-brume" : "bg-accent text-accent-ink active:scale-98"
+            }`}
+            style={{ height: 56 }}
+          >
+            {occupe ? "Vérification…" : "Entrer"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* Bouton de suppression en deux temps (pas de fenêtre de confirmation) */
 function BoutonSuppression({ surConfirmer, etiquette }) {
   const [arme, setArme] = useState(false);
@@ -849,39 +909,79 @@ export default function App() {
   const [edition, setEdition] = useState(null); // null | {id} | {nouveau:true}
   const [minuteur, setMinuteur] = useState(null); // {total, restant, label}
   const [fete, setFete] = useState(null); // {titre, deja, total}
+  const [verrou, setVerrou] = useState(null); // null | {erreur?, occupe?}
+  const vivantRef = useRef(true);
 
-  /* ---- chargement initial : horodatages → serveur → état local ---- */
+  async function afficherDonnees() {
+    const { persos, res } = await chargerTout();
+    let pSauve = await lire("app:profil");
+    if (pSauve === "maman") pSauve = "valerie";
+    if (!vivantRef.current) return;
+    setProgrammesPerso(persos);
+    setStore(res);
+    if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
+    setChargement(false);
+  }
+
+  /* ---- chargement initial : horodatages → code → serveur → état local ---- */
   useEffect(() => {
-    let vivant = true;
+    vivantRef.current = true;
     (async () => {
       horodatages = (await lire("app:horodatages")) || {};
-      let sync = false;
+      codeApp = await lire("app:code");
+      let statut = "off";
       try {
-        sync = (await tirerDepuisServeur()) !== null;
+        statut = await tirerDepuisServeur();
       } catch (e) {}
-      const { persos, res } = await chargerTout();
-      let pSauve = await lire("app:profil");
-      if (pSauve === "maman") pSauve = "valerie";
-      if (!vivant) return;
-      setProgrammesPerso(persos);
-      setStore(res);
-      setSyncEtat(sync ? "ok" : "off");
-      if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
-      setChargement(false);
+      if (!vivantRef.current) return;
+      if (statut === "code") {
+        setVerrou({});
+        return;
+      }
+      setSyncEtat(statut === "ok" || statut === "maj" ? "ok" : "off");
+      await afficherDonnees();
     })();
-    return () => { vivant = false; };
+    return () => { vivantRef.current = false; };
   }, []);
+
+  /* ---- déverrouillage par code d'accès ---- */
+  async function deverrouiller(code) {
+    setVerrou({ occupe: true });
+    codeApp = code;
+    let statut;
+    try {
+      statut = await tirerDepuisServeur();
+    } catch (e) {
+      codeApp = null;
+      setVerrou({ erreur: "Serveur injoignable — réessaie dans un instant." });
+      return;
+    }
+    if (statut === "code") {
+      codeApp = null;
+      setVerrou({ erreur: "Code incorrect, réessaie." });
+      return;
+    }
+    ecrireBrut("app:code", code);
+    setSyncEtat("ok");
+    setVerrou(null);
+    await afficherDonnees();
+  }
 
   /* ---- rafraîchissement périodique quand la synchro est active ---- */
   useEffect(() => {
     if (syncEtat !== "ok") return;
     const rafraichir = async () => {
       try {
-        const adopte = await tirerDepuisServeur();
-        if (adopte) {
+        const statut = await tirerDepuisServeur();
+        if (statut === "maj") {
           const { persos, res } = await chargerTout();
           setProgrammesPerso(persos);
           setStore(res);
+        } else if (statut === "code") {
+          /* le code a été changé côté serveur : on reverrouille */
+          codeApp = null;
+          ecrireBrut("app:code", null);
+          setVerrou({ erreur: "Le code d’accès a changé — entre le nouveau code." });
         }
       } catch (e) {}
     };
@@ -1045,6 +1145,18 @@ export default function App() {
     return { total: donnees.historique.length, cetteSemaine, serie, barres };
   }, [store, profil]);
 
+  /* ---- écran de verrouillage ---- */
+  if (verrou) {
+    return (
+      <EcranVerrou
+        profil={profil}
+        erreur={verrou.erreur}
+        occupe={!!verrou.occupe}
+        surValider={deverrouiller}
+      />
+    );
+  }
+
   /* ---- écran de chargement ---- */
   if (chargement) {
     return (
@@ -1083,8 +1195,9 @@ export default function App() {
 
           {/* sélecteur de profil */}
           <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label="Choisir le profil">
-            {Object.entries(PROFILS).map(([id, p]) => {
+            {Object.keys(PROFILS).map((id) => {
               const actif = profil === id;
+              const nom = nomAffiche(store[id], id);
               return (
                 <button
                   key={id}
@@ -1100,9 +1213,9 @@ export default function App() {
                       actif ? "encre-sur-accent" : "bg-carte2"
                     }`}
                   >
-                    {p.initiale}
+                    {nom.charAt(0).toUpperCase()}
                   </span>
-                  {p.nom}
+                  <span className="truncate" style={{ maxWidth: 110 }}>{nom}</span>
                 </button>
               );
             })}
@@ -1281,6 +1394,7 @@ function VueSemaine({
   surOuvrir, surMode, surMesure, surCreer, surEditer,
 }) {
   const p = PROFILS[profil];
+  const nom = nomAffiche(donnees, profil);
   const dateFr = FORMAT_JOUR.format(new Date());
 
   return (
@@ -1288,7 +1402,7 @@ function VueSemaine({
       <div>
         <p className="text-xs uppercase tracking-widest text-accent font-bold transi">{dateFr}</p>
         <h2 className="text-2xl font-extrabold tracking-tight mt-1">
-          Salut {p.nom} !
+          Salut {nom} !
         </h2>
         <p className="text-brume text-sm mt-1">{p.detail} — on avance à ton rythme.</p>
       </div>
@@ -1443,6 +1557,18 @@ function VueSemaine({
             <p className="text-brume text-xs mt-1">Ajustables quand tu veux</p>
           </div>
         </div>
+        <label className="block mb-3">
+          <span className="text-xs text-brume block mb-1.5">Prénom</span>
+          <input
+            type="text"
+            value={donnees.mesures.nom || ""}
+            onChange={(e) => surMesure("nom", e.target.value)}
+            placeholder={PROFILS[profil].nom}
+            className="w-full rounded-xl bg-carte2 px-3 text-center font-extrabold text-base outline-none placeholder-slate-600"
+            style={{ height: 48 }}
+            aria-label="Prénom"
+          />
+        </label>
         <div className="grid grid-cols-3 gap-2">
           {[["age", "Âge", "ans"], ["taille", "Taille", "cm"], ["poids", "Poids", "kg"]].map(
             ([champ, etiquette, unite]) => (

@@ -26,4 +26,28 @@ Par défaut les données restent sur chaque appareil. Pour que les deux téléph
 2. Redéployer (onglet Deployments → ⋯ → Redeploy, ou pousser n'importe quel commit).
 3. C'est tout : l'app détecte l'API et affiche un petit nuage ☁ en haut à droite. Sans base, elle reste en mode local.
 
-Notes : synchro « dernier écrit gagne » clé par clé, rafraîchie au lancement, au retour sur l'app et toutes les 45 s. L'endpoint `/api/etat` n'est pas authentifié — la confidentialité repose sur l'URL du déploiement (app personnelle).
+Notes : synchro « dernier écrit gagne » clé par clé, rafraîchie au lancement, au retour sur l'app et toutes les 45 s.
+
+## Code d'accès (recommandé si la synchro est activée)
+
+Pour protéger les données maintenant que l'app est en ligne :
+
+1. Dashboard Vercel → projet → **Settings** → **Environment Variables**.
+2. Ajouter `COACHWORK_CODE` = le code de votre choix (ex. `2609`), tous les environnements.
+3. **Redeploy**.
+
+Au prochain lancement, l'app demande le code une seule fois par appareil (il reste mémorisé sur le téléphone, jamais synchronisé). L'API refuse toute lecture/écriture sans ce code : sans lui, un visiteur qui tombe sur l'URL ne voit qu'un écran de verrouillage. Pour changer le code : modifier la variable puis Redeploy — les téléphones redemanderont le nouveau code.
+
+Sans `COACHWORK_CODE`, l'app fonctionne comme avant (pas d'écran de code).
+
+## Un ami veut utiliser l'app ?
+
+Chaque « duo » a son propre déploiement, ses propres données, son propre code :
+
+1. L'ami se crée un compte GitHub + Vercel (gratuits), **fork** ce repo (bouton Fork sur GitHub), puis l'importe sur [vercel.com/new](https://vercel.com/new) — aucun réglage à changer.
+2. En option : sa propre base Upstash (synchro) et son propre `COACHWORK_CODE`, comme ci-dessus.
+3. Dans l'app, les prénoms se changent directement dans **Mes repères** (champ Prénom, un par profil) — pas besoin de toucher au code.
+
+À savoir : les charges de départ conseillées et certains conseils (reprise à 54 ans…) ont été écrits pour Esteban & Valérie ; ils restent de bons ordres de grandeur pour des débutants, mais l'ami peut les ajuster dans `App.jsx` (dictionnaire `EXOS`) s'il veut personnaliser.
+
+Ne partagez pas votre propre URL + code avec d'autres : tout le monde y écrirait dans les deux mêmes profils.

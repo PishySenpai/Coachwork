@@ -22,10 +22,16 @@ async function redis(commande) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Code");
   if (req.method === "OPTIONS") return res.status(204).end();
   const { url, jeton } = configRedis();
   if (!url || !jeton) return res.status(200).json({ sync: false });
+
+  /* Code d'accès : si COACHWORK_CODE est défini, toute requête doit le fournir */
+  const codeAttendu = process.env.COACHWORK_CODE;
+  if (codeAttendu && (req.headers || {})["x-code"] !== codeAttendu) {
+    return res.status(401).json({ codeRequis: true });
+  }
 
   try {
     if (req.method === "GET") {
