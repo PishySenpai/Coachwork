@@ -38,6 +38,10 @@ body {
 
 .chiffres { font-variant-numeric: tabular-nums; }
 
+/* rouge sémantique (suppression), distinct des accents de profil */
+.bg-rouge-doux { background-color: rgba(248, 113, 113, 0.15); }
+.text-rouge { color: #f87171; }
+
 /* ---------- transitions & animations ---------- */
 .transi {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,

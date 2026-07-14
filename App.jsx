@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
-  Stethoscope, Scale, Ruler,
+  Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* Persistance : window.storage → IndexedDB → mémoire                  */
+/* Persistance locale : window.storage → IndexedDB → mémoire           */
 /* ------------------------------------------------------------------ */
 
 const mem = new Map();
@@ -64,7 +64,7 @@ async function lire(cle) {
   return mem.has(cle) ? JSON.parse(mem.get(cle)) : null;
 }
 
-async function ecrire(cle, valeur) {
+async function ecrireBrut(cle, valeur) {
   const v = JSON.stringify(valeur);
   mem.set(cle, v);
   try {
@@ -78,6 +78,91 @@ async function ecrire(cle, valeur) {
   try {
     await idbEcrire(cle, v);
   } catch (e) {}
+}
+
+/* ------------------------------------------------------------------ */
+/* Synchronisation entre téléphones (API Vercel, si configurée)        */
+/* Chaque clé porte un horodatage : le dernier écrit gagne.            */
+/* ------------------------------------------------------------------ */
+
+const API_SYNC = "/api/etat";
+/* Clés propres à l'appareil : jamais synchronisées */
+const CLES_LOCALES = new Set(["app:profil", "app:horodatages"]);
+
+let horodatages = {};
+let syncDisponible = false;
+const enAttente = new Map();
+let minuteriePoussee = null;
+
+function programmerPoussee() {
+  if (minuteriePoussee) return;
+  minuteriePoussee = setTimeout(async () => {
+    minuteriePoussee = null;
+    if (!enAttente.size) return;
+    const entrees = [...enAttente.values()];
+    enAttente.clear();
+    try {
+      const r = await fetch(API_SYNC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entrees }),
+      });
+      if (!r.ok) throw new Error("poussée refusée");
+    } catch (e) {
+      /* on remet en file, réessayé à la prochaine écriture ou au prochain cycle */
+      for (const en of entrees) {
+        const existante = enAttente.get(en.cle);
+        if (!existante || existante.t < en.t) enAttente.set(en.cle, en);
+      }
+    }
+  }, 800);
+}
+
+async function ecrire(cle, valeur) {
+  await ecrireBrut(cle, valeur);
+  if (CLES_LOCALES.has(cle)) return;
+  const t = Date.now();
+  horodatages[cle] = t;
+  ecrireBrut("app:horodatages", horodatages);
+  if (syncDisponible) {
+    enAttente.set(cle, { cle, v: valeur, t });
+    programmerPoussee();
+  }
+}
+
+/* Récupère l'état distant et adopte les clés plus récentes.
+   Retourne true si quelque chose a changé localement. */
+async function tirerDepuisServeur() {
+  const r = await fetch(API_SYNC, { signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error("api indisponible");
+  const j = await r.json();
+  if (!j.sync) return null;
+  syncDisponible = true;
+  let adopte = false;
+  const aPousser = [];
+  const distant = j.etat || {};
+  for (const [cle, val] of Object.entries(distant)) {
+    if (CLES_LOCALES.has(cle) || !val || typeof val.t !== "number") continue;
+    if ((horodatages[cle] || 0) < val.t) {
+      await ecrireBrut(cle, val.v);
+      horodatages[cle] = val.t;
+      adopte = true;
+    }
+  }
+  /* clés locales plus récentes que le serveur : on les pousse */
+  for (const [cle, t] of Object.entries(horodatages)) {
+    if (CLES_LOCALES.has(cle)) continue;
+    if (!distant[cle] || distant[cle].t < t) {
+      const v = await lire(cle);
+      if (v != null) aPousser.push({ cle, v, t });
+    }
+  }
+  if (adopte) ecrireBrut("app:horodatages", horodatages);
+  if (aPousser.length) {
+    for (const e of aPousser) enAttente.set(e.cle, e);
+    programmerPoussee();
+  }
+  return adopte;
 }
 
 /* Migration : l'ancien profil « maman » devient « valerie » */
@@ -102,9 +187,13 @@ function cleJour(d = new Date()) {
   return `${d.getFullYear()}-${m}-${j}`;
 }
 
-function lundiDe(iso) {
+function depuisCle(iso) {
   const [a, m, j] = iso.split("-").map(Number);
-  const d = new Date(a, m - 1, j);
+  return new Date(a, m - 1, j);
+}
+
+function lundiDe(iso) {
+  const d = depuisCle(iso);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return cleJour(d);
 }
@@ -113,6 +202,9 @@ function semainesAvant(isoLundi, n) {
   const [a, m, j] = isoLundi.split("-").map(Number);
   return cleJour(new Date(a, m - 1, j - 7 * n));
 }
+
+const FORMAT_JOUR = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+const FORMAT_COURT = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
 
 /* ------------------------------------------------------------------ */
 /* Profils & mesures                                                   */
@@ -129,8 +221,8 @@ const MESURES_DEFAUT = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Les exercices (partagés entre les deux programmes : la charge       */
-/* notée sur un exercice suit dans tous les modes)                     */
+/* Les exercices (partagés entre tous les programmes : la charge       */
+/* notée sur un exercice suit partout)                                 */
 /* ------------------------------------------------------------------ */
 
 const EXOS = {
@@ -146,27 +238,28 @@ const EXOS = {
     conseil:
       "Pieds à largeur d’épaules, descends jusqu’à 90° et pousse sans jamais verrouiller les genoux.",
   },
-  "dev-poitrine": {
-    id: "dev-poitrine",
-    nom: "Développé poitrine assis",
-    zone: "Poussée",
+  goblet: {
+    id: "goblet",
+    nom: "Goblet squat",
+    zone: "Jambes",
     series: 3,
-    reps: "10",
+    reps: "12",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 7,5–12,5 kg" },
-    variante: "Poids libres : développé haltères sur banc.",
-    conseil: "Omoplates serrées contre le dossier, pousse en expirant, redescends en 2 secondes.",
+    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–8 kg" },
+    variante: "Genoux sensibles ce jour-là ? Repasse sur la presse à cuisses.",
+    conseil: "Haltère serré contre la poitrine, dos droit, talons au sol. Descends comme pour t’asseoir.",
   },
-  "tirage-vertical": {
-    id: "tirage-vertical",
-    nom: "Tirage vertical",
-    zone: "Tirage",
+  "souleve-roumain": {
+    id: "souleve-roumain",
+    nom: "Soulevé de terre roumain, haltères",
+    zone: "Jambes",
     series: 3,
-    reps: "10",
+    reps: "12",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
-    variante: "Machine à tractions assistées si disponible.",
-    conseil: "Tire la barre vers le haut de la poitrine, coudes vers le bas — pas derrière la nuque.",
+    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
+    variante: "Ou leg curl si le geste n’est pas encore à l’aise.",
+    conseil:
+      "Pousse les hanches vers l’arrière, dos plat, haltères qui glissent le long des cuisses. Tu dois sentir l’arrière des jambes, jamais le bas du dos.",
   },
   "leg-curl": {
     id: "leg-curl",
@@ -179,50 +272,16 @@ const EXOS = {
     variante: "Version allongée selon les machines de la salle.",
     conseil: "Fléchis en 1 seconde, retiens la remontée en 3 secondes. Les ischios adorent la lenteur.",
   },
-  planche: {
-    id: "planche",
-    nom: "Planche",
-    zone: "Gainage",
-    series: 3,
-    reps: "20–40 s",
-    repos: 60,
-    sansCharge: true,
-    charge: { esteban: "Sur les avant-bras, corps aligné", valerie: "Sur les genoux au départ — parfait aussi" },
-    variante: "Trop facile ? Décolle un pied 5 s de chaque côté.",
-    conseil: "Serre les fessiers et le ventre, ne laisse pas le bas du dos se creuser.",
-  },
-  goblet: {
-    id: "goblet",
-    nom: "Goblet squat",
+  "leg-extension": {
+    id: "leg-extension",
+    nom: "Leg extension",
     zone: "Jambes",
-    series: 3,
-    reps: "12",
-    repos: 90,
-    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–8 kg" },
-    variante: "Genoux sensibles ce jour-là ? Repasse sur la presse à cuisses.",
-    conseil: "Haltère serré contre la poitrine, dos droit, talons au sol. Descends comme pour t’asseoir.",
-  },
-  "dev-epaules": {
-    id: "dev-epaules",
-    nom: "Développé épaules assis",
-    zone: "Poussée",
-    series: 3,
-    reps: "10",
-    repos: 90,
-    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
-    variante: "Poids libres : développé avec deux haltères légers.",
-    conseil: "Ne hausse pas les épaules vers les oreilles ; le mouvement reste fluide, sans à-coups.",
-  },
-  rowing: {
-    id: "rowing",
-    nom: "Rowing assis machine",
-    zone: "Tirage",
-    series: 3,
-    reps: "12",
-    repos: 90,
-    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
-    variante: "Ou tirage horizontal à la poulie basse.",
-    conseil: "Poitrine contre le support, tire les coudes vers l’arrière et serre les omoplates 1 seconde.",
+    series: 2,
+    reps: "15",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
+    variante: "Réglage : le coussin repose juste au-dessus des chevilles.",
+    conseil: "Monte en 1 seconde, redescends en 3. Léger et propre plutôt que lourd et saccadé.",
   },
   "hip-thrust": {
     id: "hip-thrust",
@@ -239,29 +298,27 @@ const EXOS = {
     conseil:
       "Pousse dans les talons, serre fort les fessiers 1 s en haut. Très efficace et très doux pour les articulations.",
   },
-  "dead-bug": {
-    id: "dead-bug",
-    nom: "Dead bug",
-    zone: "Gainage",
+  "dev-poitrine": {
+    id: "dev-poitrine",
+    nom: "Développé poitrine assis",
+    zone: "Poussée",
     series: 3,
-    reps: "8 / côté",
-    repos: 60,
-    sansCharge: true,
-    charge: { esteban: "Bras et jambe opposés tendus", valerie: "Amplitude réduite au départ" },
-    variante: "Trop facile ? Ralentis encore le mouvement.",
-    conseil: "Bas du dos plaqué au sol du début à la fin. Souffle en allongeant bras et jambe.",
-  },
-  "souleve-roumain": {
-    id: "souleve-roumain",
-    nom: "Soulevé de terre roumain, haltères",
-    zone: "Jambes",
-    series: 3,
-    reps: "12",
+    reps: "10",
     repos: 90,
-    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
-    variante: "Ou leg curl si le geste n’est pas encore à l’aise.",
-    conseil:
-      "Pousse les hanches vers l’arrière, dos plat, haltères qui glissent le long des cuisses. Tu dois sentir l’arrière des jambes, jamais le bas du dos.",
+    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 7,5–12,5 kg" },
+    variante: "Poids libres : développé haltères sur banc.",
+    conseil: "Omoplates serrées contre le dossier, pousse en expirant, redescends en 2 secondes.",
+  },
+  "dev-epaules": {
+    id: "dev-epaules",
+    nom: "Développé épaules assis",
+    zone: "Poussée",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
+    variante: "Poids libres : développé avec deux haltères légers.",
+    conseil: "Ne hausse pas les épaules vers les oreilles ; le mouvement reste fluide, sans à-coups.",
   },
   pompes: {
     id: "pompes",
@@ -279,6 +336,28 @@ const EXOS = {
     conseil:
       "Corps gainé comme une planche. Pour progresser : baisse le support petit à petit, semaine après semaine.",
   },
+  "tirage-vertical": {
+    id: "tirage-vertical",
+    nom: "Tirage vertical",
+    zone: "Tirage",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    variante: "Machine à tractions assistées si disponible.",
+    conseil: "Tire la barre vers le haut de la poitrine, coudes vers le bas — pas derrière la nuque.",
+  },
+  rowing: {
+    id: "rowing",
+    nom: "Rowing assis machine",
+    zone: "Tirage",
+    series: 3,
+    reps: "12",
+    repos: 90,
+    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    variante: "Ou tirage horizontal à la poulie basse.",
+    conseil: "Poitrine contre le support, tire les coudes vers l’arrière et serre les omoplates 1 seconde.",
+  },
   "tirage-horizontal": {
     id: "tirage-horizontal",
     nom: "Tirage horizontal à la poulie",
@@ -290,16 +369,29 @@ const EXOS = {
     variante: "Ou rowing un bras avec haltère, genou sur le banc.",
     conseil: "Buste droit et stable, tire la poignée vers le nombril sans te balancer.",
   },
-  "leg-extension": {
-    id: "leg-extension",
-    nom: "Leg extension",
-    zone: "Jambes",
-    series: 2,
-    reps: "15",
+  planche: {
+    id: "planche",
+    nom: "Planche",
+    zone: "Gainage",
+    series: 3,
+    reps: "20–40 s",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
-    variante: "Réglage : le coussin repose juste au-dessus des chevilles.",
-    conseil: "Monte en 1 seconde, redescends en 3. Léger et propre plutôt que lourd et saccadé.",
+    sansCharge: true,
+    charge: { esteban: "Sur les avant-bras, corps aligné", valerie: "Sur les genoux au départ — parfait aussi" },
+    variante: "Trop facile ? Décolle un pied 5 s de chaque côté.",
+    conseil: "Serre les fessiers et le ventre, ne laisse pas le bas du dos se creuser.",
+  },
+  "dead-bug": {
+    id: "dead-bug",
+    nom: "Dead bug",
+    zone: "Gainage",
+    series: 3,
+    reps: "8 / côté",
+    repos: 60,
+    sansCharge: true,
+    charge: { esteban: "Bras et jambe opposés tendus", valerie: "Amplitude réduite au départ" },
+    variante: "Trop facile ? Ralentis encore le mouvement.",
+    conseil: "Bas du dos plaqué au sol du début à la fin. Souffle en allongeant bras et jambe.",
   },
   "planche-laterale": {
     id: "planche-laterale",
@@ -315,8 +407,17 @@ const EXOS = {
   },
 };
 
+/* Ordre logique d'une séance : jambes d'abord, gainage à la fin */
+const ZONES = [
+  ["Jambes", ["presse", "goblet", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust"]],
+  ["Poussée", ["dev-poitrine", "dev-epaules", "pompes"]],
+  ["Tirage", ["tirage-vertical", "rowing", "tirage-horizontal"]],
+  ["Gainage", ["planche", "dead-bug", "planche-laterale"]],
+];
+const ORDRE_EXOS = ZONES.flatMap(([, ids]) => ids);
+
 /* ------------------------------------------------------------------ */
-/* Les deux programmes                                                 */
+/* Programmes                                                          */
 /* ------------------------------------------------------------------ */
 
 const ECHAUFFEMENT = {
@@ -333,8 +434,16 @@ const ECHAUFFEMENT = {
 const RETOUR_AU_CALME =
   "3 min de marche très lente pour redescendre, puis 30 s d’étirement doux par groupe : quadriceps, ischios, fessiers, poitrine, dos. Respire profondément — cette séance, personne ne pourra te l’enlever.";
 
-const PROGRAMMES = {
-  fullbody: {
+const CARDIO_GENERIQUE = {
+  esteban:
+    "15–20 min au choix : tapis incliné, vélo ou elliptique, à allure modérée. Option : quelques passages plus toniques d’une minute.",
+  valerie:
+    "15–20 min au choix : vélo ou elliptique de préférence (zéro impact), à une allure où tu peux parler.",
+};
+
+const PROGRAMMES_BASE = [
+  {
+    id: "fullbody",
     nom: "Full body",
     description:
       "Tout le corps à chaque séance. Le format le plus efficace pour débuter et perdre du gras : chaque muscle travaille 3 fois par semaine.",
@@ -385,7 +494,8 @@ const PROGRAMMES = {
       },
     ],
   },
-  split: {
+  {
+    id: "split",
     nom: "Haut / Bas",
     description:
       "Jour 1 haut du corps, jour 2 bas du corps, jour 3 corps entier. Plus de volume par zone à chaque séance — garde au moins un jour de repos entre deux.",
@@ -438,9 +548,36 @@ const PROGRAMMES = {
       },
     ],
   },
-};
+];
 
-const TOUTES_SEANCES = [...PROGRAMMES.fullbody.seances, ...PROGRAMMES.split.seances];
+const SEANCES_BASE = PROGRAMMES_BASE.flatMap((p) => p.seances);
+
+/* Transforme un programme perso stocké ({id, nom, seances:[{nom, exoIds}]})
+   en programme complet affichable */
+function construirePerso(p) {
+  return {
+    id: p.id,
+    nom: p.nom,
+    perso: true,
+    description: `Programme personnalisé · ${p.seances.length} séance${p.seances.length > 1 ? "s" : ""} par semaine`,
+    seances: p.seances.map((s, i) => ({
+      id: `${p.id}-s${i}`,
+      badge: String(i + 1),
+      titre: s.nom,
+      sousTitre: "sur mesure",
+      resume: s.exoIds.slice(0, 3).map((eid) => (EXOS[eid] ? EXOS[eid].nom.split(",")[0] : "")).join(" · "),
+      exos: s.exoIds.map((eid) => EXOS[eid]).filter(Boolean),
+      cardio: CARDIO_GENERIQUE,
+    })),
+  };
+}
+
+function idsSeancesDe(persos) {
+  return [
+    ...SEANCES_BASE.map((s) => s.id),
+    ...persos.flatMap((p) => p.seances.map((s, i) => `${p.id}-s${i}`)),
+  ];
+}
 
 const MESSAGES_FETE = [
   "La régularité bat le talent. Et toi, tu es là.",
@@ -486,10 +623,10 @@ const CONSEILS = [
   {
     id: "modes",
     icone: Dumbbell,
-    titre: "Full body ou Haut / Bas ?",
+    titre: "Quel programme choisir ?",
     texte: [
       "Full body : chaque muscle travaille 3 fois par semaine — c’est le format le plus efficace pour débuter, apprendre les gestes et perdre du gras. Reste dessus au moins 4 à 6 semaines.",
-      "Haut / Bas : plus de volume par zone et des séances plus ciblées — agréable quand le full body devient routinier. Les charges que tu as notées te suivent d’un mode à l’autre : ce sont les mêmes exercices, réorganisés. Dans les deux cas, 3 séances par semaine avec un jour de repos entre deux.",
+      "Haut / Bas : plus de volume par zone et des séances plus ciblées — agréable quand le full body devient routinier. Tu peux aussi créer tes propres programmes selon l’envie. Dans tous les cas, les charges notées te suivent (ce sont les mêmes exercices) et vise 3 séances par semaine avec un jour de repos entre deux.",
     ],
   },
   {
@@ -540,16 +677,48 @@ const CONSEILS = [
 ];
 
 /* ------------------------------------------------------------------ */
+/* Chargement de l'état complet depuis le stockage local               */
+/* ------------------------------------------------------------------ */
+
+async function chargerTout() {
+  const persos = (await lire("app:programmesPerso")) || [];
+  const ids = idsSeancesDe(persos);
+  const res = {};
+  for (const p of ["esteban", "valerie"]) {
+    const seances = {};
+    await Promise.all(
+      ids.map(async (id) => {
+        seances[id] = (await lireProfil(p, `seance:${id}`)) || {};
+      })
+    );
+    const [ch, ass, mode, mesures] = await Promise.all([
+      lireProfil(p, "charges"),
+      lireProfil(p, "assiduite"),
+      lireProfil(p, "mode"),
+      lireProfil(p, "mesures"),
+    ]);
+    res[p] = {
+      seances,
+      charges: ch || {},
+      historique: (ass && ass.historique) || [],
+      mode: typeof mode === "string" ? mode : "fullbody",
+      mesures: { ...MESURES_DEFAUT[p], ...(mesures || {}) },
+    };
+  }
+  return { persos, res };
+}
+
+/* ------------------------------------------------------------------ */
 /* Petits composants                                                   */
 /* ------------------------------------------------------------------ */
 
-function CaseCoche({ coche, surClic, taille = "h-12 w-12" }) {
+function CaseCoche({ coche, surClic }) {
   return (
     <button
       onClick={surClic}
       aria-pressed={coche}
       aria-label={coche ? "Marquer comme à faire" : "Marquer comme fait"}
-      className={`${taille} shrink-0 rounded-full border-2 flex items-center justify-center transi ${
+      className={`h-12 w-12 shrink-0 rounded-full border-2 flex items-center justify-center transi ${
         coche ? "bg-accent border-transparent" : "border-slate-600 bg-transparent active:scale-95"
       }`}
     >
@@ -635,60 +804,92 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
   );
 }
 
+/* Bouton de suppression en deux temps (pas de fenêtre de confirmation) */
+function BoutonSuppression({ surConfirmer, etiquette }) {
+  const [arme, setArme] = useState(false);
+  useEffect(() => {
+    if (!arme) return;
+    const t = setTimeout(() => setArme(false), 3000);
+    return () => clearTimeout(t);
+  }, [arme]);
+  return arme ? (
+    <button
+      onClick={() => { setArme(false); surConfirmer(); }}
+      className="h-11 px-3 rounded-xl bg-rouge-doux text-rouge text-xs font-bold shrink-0 transi"
+    >
+      Confirmer ?
+    </button>
+  ) : (
+    <button
+      onClick={() => setArme(true)}
+      aria-label={etiquette}
+      className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center shrink-0 active:scale-95 transi"
+    >
+      <Trash2 size={17} className="text-brume" />
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Application                                                         */
 /* ------------------------------------------------------------------ */
 
 function etatVide() {
-  const seances = {};
-  for (const s of TOUTES_SEANCES) seances[s.id] = {};
-  return { seances, charges: {}, historique: [], mode: "fullbody", mesures: { age: "", taille: "", poids: "" } };
+  return { seances: {}, charges: {}, historique: [], mode: "fullbody", mesures: { age: "", taille: "", poids: "" } };
 }
 
 export default function App() {
   const [profil, setProfil] = useState("esteban");
   const [chargement, setChargement] = useState(true);
   const [store, setStore] = useState({ esteban: etatVide(), valerie: etatVide() });
+  const [programmesPerso, setProgrammesPerso] = useState([]);
+  const [syncEtat, setSyncEtat] = useState("off"); // "ok" | "off"
   const [onglet, setOnglet] = useState("semaine");
   const [ouverte, setOuverte] = useState(null); // id de séance ou null
+  const [edition, setEdition] = useState(null); // null | {id} | {nouveau:true}
   const [minuteur, setMinuteur] = useState(null); // {total, restant, label}
-  const [fete, setFete] = useState(null); // {s, deja}
+  const [fete, setFete] = useState(null); // {titre, deja, total}
 
-  /* ---- chargement initial ---- */
+  /* ---- chargement initial : horodatages → serveur → état local ---- */
   useEffect(() => {
     let vivant = true;
     (async () => {
-      const res = {};
-      for (const p of ["esteban", "valerie"]) {
-        const seances = {};
-        await Promise.all(
-          TOUTES_SEANCES.map(async (s) => {
-            seances[s.id] = (await lireProfil(p, `seance:${s.id}`)) || {};
-          })
-        );
-        const [ch, ass, mode, mesures] = await Promise.all([
-          lireProfil(p, "charges"),
-          lireProfil(p, "assiduite"),
-          lireProfil(p, "mode"),
-          lireProfil(p, "mesures"),
-        ]);
-        res[p] = {
-          seances,
-          charges: ch || {},
-          historique: (ass && ass.historique) || [],
-          mode: mode === "split" ? "split" : "fullbody",
-          mesures: { ...MESURES_DEFAUT[p], ...(mesures || {}) },
-        };
-      }
+      horodatages = (await lire("app:horodatages")) || {};
+      let sync = false;
+      try {
+        sync = (await tirerDepuisServeur()) !== null;
+      } catch (e) {}
+      const { persos, res } = await chargerTout();
       let pSauve = await lire("app:profil");
       if (pSauve === "maman") pSauve = "valerie";
       if (!vivant) return;
+      setProgrammesPerso(persos);
       setStore(res);
+      setSyncEtat(sync ? "ok" : "off");
       if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
       setChargement(false);
     })();
     return () => { vivant = false; };
   }, []);
+
+  /* ---- rafraîchissement périodique quand la synchro est active ---- */
+  useEffect(() => {
+    if (syncEtat !== "ok") return;
+    const rafraichir = async () => {
+      try {
+        const adopte = await tirerDepuisServeur();
+        if (adopte) {
+          const { persos, res } = await chargerTout();
+          setProgrammesPerso(persos);
+          setStore(res);
+        }
+      } catch (e) {}
+    };
+    const t = setInterval(rafraichir, 45000);
+    const vis = () => { if (document.visibilityState === "visible") rafraichir(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
+  }, [syncEtat]);
 
   /* ---- minuteur de repos ---- */
   useEffect(() => {
@@ -707,13 +908,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [finie]);
 
-  /* ---- scroll en haut quand on ouvre une séance ---- */
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [ouverte, onglet]);
+  }, [ouverte, onglet, edition]);
+
+  /* ---- programmes ---- */
+  const programmes = useMemo(
+    () => [...PROGRAMMES_BASE, ...programmesPerso.map(construirePerso)],
+    [programmesPerso]
+  );
+  const toutesSeances = useMemo(() => programmes.flatMap((p) => p.seances), [programmes]);
 
   /* ---- mutations ---- */
   const donnees = store[profil];
+  const progActuel = programmes.find((p) => p.id === donnees.mode) || programmes[0];
 
   function choisirProfil(p) {
     setProfil(p);
@@ -755,18 +963,65 @@ export default function App() {
     });
   }
 
-  function terminerSeance(sid) {
-    const auj = cleJour();
-    const deja = donnees.historique.some((h) => h.s === sid && lundiDe(h.d) === lundiDe(auj));
-    const historique = deja ? donnees.historique : [...donnees.historique, { s: sid, d: auj }];
-    setStore({
-      ...store,
-      [profil]: { ...donnees, historique, seances: { ...donnees.seances, [sid]: {} } },
+  function majHistorique(historique) {
+    setStore((prev) => {
+      const p = prev[profil];
+      ecrire(`${profil}:assiduite`, { historique });
+      return { ...prev, [profil]: { ...p, historique } };
     });
-    ecrire(`${profil}:assiduite`, { historique });
-    ecrire(`${profil}:seance:${sid}`, {});
+  }
+
+  function terminerSeance(seance) {
+    const auj = cleJour();
+    const deja = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
+    const historique = deja
+      ? donnees.historique
+      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre }];
+    setStore((prev) => {
+      const p = prev[profil];
+      ecrire(`${profil}:assiduite`, { historique });
+      ecrire(`${profil}:seance:${seance.id}`, {});
+      return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: {} } } };
+    });
     setOuverte(null);
-    setFete({ s: sid, deja, total: historique.length });
+    setFete({ titre: seance.titre, deja, total: historique.length });
+  }
+
+  /* Annule la validation de cette semaine (cochée par erreur) */
+  function retirerValidation(sid) {
+    const lundiActuel = lundiDe(cleJour());
+    majHistorique(donnees.historique.filter((h) => !(h.s === sid && lundiDe(h.d) === lundiActuel)));
+  }
+
+  function supprimerEntree(entree) {
+    majHistorique(donnees.historique.filter((h) => h !== entree));
+  }
+
+  function sauverProgramme(brouillon, idExistant) {
+    const id = idExistant || `perso-${Date.now()}`;
+    const prog = {
+      id,
+      nom: brouillon.nom.trim() || "Mon programme",
+      seances: brouillon.seances.map((s, i) => ({
+        nom: s.nom.trim() || `Séance ${i + 1}`,
+        exoIds: [...s.exoIds].sort((a, b) => ORDRE_EXOS.indexOf(a) - ORDRE_EXOS.indexOf(b)),
+      })),
+    };
+    const liste = idExistant
+      ? programmesPerso.map((p) => (p.id === idExistant ? prog : p))
+      : [...programmesPerso, prog];
+    setProgrammesPerso(liste);
+    ecrire("app:programmesPerso", liste);
+    choisirMode(id);
+    setEdition(null);
+  }
+
+  function supprimerProgramme(id) {
+    const liste = programmesPerso.filter((p) => p.id !== id);
+    setProgrammesPerso(liste);
+    ecrire("app:programmesPerso", liste);
+    if (donnees.mode === id) choisirMode("fullbody");
+    setEdition(null);
   }
 
   /* ---- statistiques d’assiduité ---- */
@@ -781,7 +1036,7 @@ export default function App() {
     const cetteSemaine = parSemaine.get(lundiActuel) || new Set();
     let serie = 0;
     let w = parSemaine.has(lundiActuel) ? lundiActuel : semainesAvant(lundiActuel, 1);
-    while (parSemaine.has(w)) { serie++; w = semainesAvant(w, 1); }
+    while (parSemaine.has(w) && parSemaine.get(w).size > 0) { serie++; w = semainesAvant(w, 1); }
     const barres = [];
     for (let i = 5; i >= 0; i--) {
       const wk = semainesAvant(lundiActuel, i);
@@ -800,7 +1055,7 @@ export default function App() {
     );
   }
 
-  const seanceOuverte = TOUTES_SEANCES.find((s) => s.id === ouverte) || null;
+  const seanceOuverte = toutesSeances.find((s) => s.id === ouverte) || null;
 
   return (
     <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta">
@@ -812,10 +1067,18 @@ export default function App() {
             <span className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center transi">
               <Dumbbell size={20} className="text-accent-ink" strokeWidth={2.5} />
             </span>
-            <div>
+            <div className="flex-1">
               <h1 className="text-lg font-extrabold leading-none tracking-tight">Coachwork</h1>
               <p className="text-brume text-xs mt-0.5">3 séances / semaine, à deux</p>
             </div>
+            <span
+              className="flex items-center gap-1.5 text-xs text-brume"
+              title={syncEtat === "ok" ? "Synchronisé entre vos téléphones" : "Données sur cet appareil uniquement"}
+            >
+              {syncEtat === "ok"
+                ? <Cloud size={16} className="text-accent transi" />
+                : <CloudOff size={16} />}
+            </span>
           </div>
 
           {/* sélecteur de profil */}
@@ -846,24 +1109,33 @@ export default function App() {
           </div>
         </header>
 
-        {/* ---------- vue séance détaillée ---------- */}
-        {seanceOuverte ? (
+        {/* ---------- contenu ---------- */}
+        {edition ? (
+          <VueEditeur
+            initial={edition.id ? programmesPerso.find((p) => p.id === edition.id) : null}
+            surSauver={(brouillon) => sauverProgramme(brouillon, edition.id || null)}
+            surSupprimer={edition.id ? () => supprimerProgramme(edition.id) : null}
+            surFermer={() => setEdition(null)}
+          />
+        ) : seanceOuverte ? (
           <VueSeance
             seance={seanceOuverte}
             profil={profil}
             checks={donnees.seances[seanceOuverte.id] || {}}
             charges={donnees.charges}
+            faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
             surRetour={() => setOuverte(null)}
             surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
             surCharge={noterCharge}
             surRepos={(exo) => setMinuteur({ total: exo.repos, restant: exo.repos, label: exo.nom })}
-            surFin={() => terminerSeance(seanceOuverte.id)}
+            surFin={() => terminerSeance(seanceOuverte)}
+            surAnnuler={() => retirerValidation(seanceOuverte.id)}
           />
         ) : (
           <>
             {/* onglets */}
-            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-carte p-1 border border-ligne mb-5">
-              {[["semaine", "Ma semaine"], ["conseils", "Conseils"]].map(([id, nom]) => (
+            <div className="grid grid-cols-3 gap-1 rounded-2xl bg-carte p-1 border border-ligne mb-5">
+              {[["semaine", "Ma semaine"], ["historique", "Historique"], ["conseils", "Conseils"]].map(([id, nom]) => (
                 <button
                   key={id}
                   onClick={() => setOnglet(id)}
@@ -881,9 +1153,21 @@ export default function App() {
                 profil={profil}
                 stats={stats}
                 donnees={donnees}
+                programmes={programmes}
+                progActuel={progActuel}
+                syncEtat={syncEtat}
                 surOuvrir={setOuverte}
                 surMode={choisirMode}
                 surMesure={noterMesure}
+                surCreer={() => setEdition({ nouveau: true })}
+                surEditer={(id) => setEdition({ id })}
+              />
+            ) : onglet === "historique" ? (
+              <VueHistorique
+                profil={profil}
+                historique={donnees.historique}
+                toutesSeances={toutesSeances}
+                surSupprimer={supprimerEntree}
               />
             ) : (
               <div key={`conseils-${profil}`} className="vue space-y-3">
@@ -964,16 +1248,15 @@ export default function App() {
             <span className="mx-auto h-20 w-20 rounded-full bg-accent-soft flex items-center justify-center">
               <Flame size={38} className="text-accent" />
             </span>
-            <h2 className="mt-5 text-2xl font-extrabold tracking-tight">
-              Séance validée !
-            </h2>
-            <p className="mt-2 text-douce text-sm leading-relaxed">
+            <h2 className="mt-5 text-2xl font-extrabold tracking-tight">Séance validée !</h2>
+            <p className="mt-1 text-brume text-sm">{fete.titre}</p>
+            <p className="mt-3 text-douce text-sm leading-relaxed">
               {fete.deja
                 ? "Déjà comptée cette semaine — double dose, chapeau."
                 : MESSAGES_FETE[fete.total % MESSAGES_FETE.length]}
             </p>
             <p className="mt-4 text-brume text-xs chiffres">
-              {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.cetteSemaine.size}/3 cette semaine
+              {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.cetteSemaine.size} cette semaine
             </p>
             <button
               onClick={() => setFete(null)}
@@ -993,12 +1276,12 @@ export default function App() {
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
 
-function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
+function VueSemaine({
+  profil, stats, donnees, programmes, progActuel, syncEtat,
+  surOuvrir, surMode, surMesure, surCreer, surEditer,
+}) {
   const p = PROFILS[profil];
-  const programme = PROGRAMMES[donnees.mode];
-  const dateFr = new Intl.DateTimeFormat("fr-FR", {
-    weekday: "long", day: "numeric", month: "long",
-  }).format(new Date());
+  const dateFr = FORMAT_JOUR.format(new Date());
 
   return (
     <div key={profil} className="vue space-y-5">
@@ -1013,7 +1296,10 @@ function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
       {/* assiduité */}
       <section className="rounded-3xl bg-carte border border-ligne p-5">
         <div className="flex items-center gap-5">
-          <Anneau fait={Math.min(stats.cetteSemaine.size, 3)} total={3} />
+          <Anneau
+            fait={Math.min(stats.cetteSemaine.size, progActuel.seances.length)}
+            total={progActuel.seances.length}
+          />
           <div className="flex-1 space-y-3">
             <div className="flex items-center gap-3">
               <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
@@ -1042,34 +1328,68 @@ function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
         </div>
       </section>
 
-      {/* type d'entraînement */}
+      {/* programme */}
       <section>
         <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
-          Mon type d’entraînement
+          Mon programme
         </h3>
-        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-carte p-1 border border-ligne">
-          {Object.entries(PROGRAMMES).map(([id, prog]) => (
-            <button
-              key={id}
-              onClick={() => surMode(id)}
-              className={`h-11 rounded-xl text-sm font-bold transi ${
-                donnees.mode === id ? "bg-accent text-accent-ink" : "text-brume"
-              }`}
-            >
-              {prog.nom}
-            </button>
-          ))}
+        <div className="space-y-2">
+          {programmes.map((prog) => {
+            const actif = progActuel.id === prog.id;
+            return (
+              <div
+                key={prog.id}
+                className={`w-full rounded-2xl bg-carte border p-1 flex items-center transi ${
+                  actif ? "bordure-accent-douce" : "border-ligne"
+                }`}
+              >
+                <button
+                  onClick={() => surMode(prog.id)}
+                  className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left"
+                >
+                  <span
+                    className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transi ${
+                      actif ? "bg-accent border-transparent" : "border-slate-600"
+                    }`}
+                  >
+                    {actif && <Check size={13} strokeWidth={4} className="text-accent-ink" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`font-bold text-sm block ${actif ? "" : "text-douce"}`}>{prog.nom}</span>
+                    <span className="text-brume text-xs block truncate">
+                      {prog.seances.map((s) => s.titre.split(" — ").pop()).join(" · ")}
+                    </span>
+                  </span>
+                </button>
+                {prog.perso && (
+                  <button
+                    onClick={() => surEditer(prog.id)}
+                    aria-label={`Modifier le programme ${prog.nom}`}
+                    className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 mr-1 active:scale-95 transi"
+                  >
+                    <Pencil size={16} className="text-brume" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button
+            onClick={surCreer}
+            className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+          >
+            <Plus size={17} /> Créer un programme
+          </button>
         </div>
-        <p className="text-brume text-xs mt-2 leading-relaxed">{programme.description}</p>
+        <p className="text-brume text-xs mt-2 leading-relaxed">{progActuel.description}</p>
       </section>
 
       {/* séances */}
       <section>
         <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
-          Mes 3 séances de la semaine
+          Mes séances de la semaine
         </h3>
         <div className="space-y-3">
-          {programme.seances.map((s) => {
+          {progActuel.seances.map((s) => {
             const faite = stats.cetteSemaine.has(s.id);
             const nChecks = Object.values(donnees.seances[s.id] || {}).filter(Boolean).length;
             const enCours = !faite && nChecks > 0;
@@ -1107,7 +1427,8 @@ function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
         </div>
         <p className="text-brume text-xs mt-3 leading-relaxed">
           L’ordre est libre, avec au moins un jour de repos entre deux séances.
-          Chaque séance dure 45 à 60 min.
+          Chaque séance dure 45 à 60 min. Séance validée par erreur ? Ouvre-la pour l’annuler,
+          ou passe par l’onglet Historique.
         </p>
       </section>
 
@@ -1171,6 +1492,28 @@ function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
       )}
 
       <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
+        {syncEtat === "ok" ? (
+          <>
+            <Cloud size={20} className="text-accent shrink-0 mt-0.5 transi" />
+            <p className="text-xs leading-relaxed text-brume">
+              <strong className="text-douce">Synchro activée.</strong> Vos deux téléphones voient
+              les mêmes données : séances validées, charges, programmes. Tu peux suivre le
+              programme de Valérie depuis ici, et inversement.
+            </p>
+          </>
+        ) : (
+          <>
+            <CloudOff size={20} className="text-brume shrink-0 mt-0.5" />
+            <p className="text-xs leading-relaxed text-brume">
+              <strong className="text-douce">Synchro non configurée.</strong> Les données restent
+              sur cet appareil. Pour voir les séances de l’autre depuis ton téléphone, active le
+              stockage sur Vercel (voir le README du projet) — 2 minutes, gratuit.
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
         <Stethoscope size={20} className="text-brume shrink-0 mt-0.5" />
         <p className="text-xs leading-relaxed text-brume">
           Avant de commencer, un avis médical est recommandé — surtout pour une reprise après une
@@ -1182,10 +1525,242 @@ function VueSemaine({ profil, stats, donnees, surOuvrir, surMode, surMesure }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Vue « Historique »                                                  */
+/* ------------------------------------------------------------------ */
+
+function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
+  const groupes = useMemo(() => {
+    const parSemaine = new Map();
+    for (const h of historique) {
+      const w = lundiDe(h.d);
+      if (!parSemaine.has(w)) parSemaine.set(w, []);
+      parSemaine.get(w).push(h);
+    }
+    return [...parSemaine.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([semaine, entrees]) => ({
+        semaine,
+        entrees: entrees.sort((a, b) => (a.d < b.d ? 1 : -1)),
+      }));
+  }, [historique]);
+
+  const titreDe = (h) =>
+    h.titre || (toutesSeances.find((s) => s.id === h.s) || {}).titre || "Séance";
+
+  if (!historique.length) {
+    return (
+      <div key={profil} className="vue rounded-3xl bg-carte border border-ligne p-8 text-center">
+        <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
+          <Flame size={28} className="text-accent" />
+        </span>
+        <h3 className="mt-4 font-bold text-base">Aucune séance pour l’instant</h3>
+        <p className="text-brume text-sm mt-2 leading-relaxed">
+          Chaque séance validée s’affichera ici. La première est la plus belle — elle t’attend
+          dans « Ma semaine ».
+        </p>
+      </div>
+    );
+  }
+
+  const lundiActuel = lundiDe(cleJour());
+
+  return (
+    <div key={profil} className="vue space-y-5">
+      {groupes.map(({ semaine, entrees }) => (
+        <section key={semaine}>
+          <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-2.5">
+            {semaine === lundiActuel
+              ? "Cette semaine"
+              : `Semaine du ${FORMAT_COURT.format(depuisCle(semaine))}`}
+            <span className="text-accent transi"> · {entrees.length} séance{entrees.length > 1 ? "s" : ""}</span>
+          </h3>
+          <div className="space-y-2">
+            {entrees.map((h, i) => (
+              <div
+                key={`${h.s}-${h.d}-${i}`}
+                className="rounded-2xl bg-carte border border-ligne p-3 flex items-center gap-3"
+              >
+                <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+                  <Check size={19} strokeWidth={3} className="text-accent transi" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">{titreDe(h)}</p>
+                  <p className="text-brume text-xs mt-0.5">{FORMAT_JOUR.format(depuisCle(h.d))}</p>
+                </div>
+                <BoutonSuppression
+                  etiquette="Supprimer cette séance de l’historique"
+                  surConfirmer={() => surSupprimer(h)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      <p className="text-brume text-center text-xs leading-relaxed">
+        Une séance validée par erreur ? Supprime-la ici, l’assiduité se recalcule toute seule.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Éditeur de programme personnalisé                                   */
+/* ------------------------------------------------------------------ */
+
+function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
+  const [nom, setNom] = useState(initial ? initial.nom : "");
+  const [seances, setSeances] = useState(
+    initial
+      ? initial.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] }))
+      : [{ nom: "Séance 1", exoIds: [] }]
+  );
+
+  const valide = seances.length >= 1 && seances.every((s) => s.exoIds.length >= 1);
+
+  function majSeance(i, patch) {
+    setSeances((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  }
+
+  function basculerExo(i, exoId) {
+    setSeances((prev) =>
+      prev.map((s, j) => {
+        if (j !== i) return s;
+        const exoIds = s.exoIds.includes(exoId)
+          ? s.exoIds.filter((e) => e !== exoId)
+          : [...s.exoIds, exoId];
+        return { ...s, exoIds };
+      })
+    );
+  }
+
+  return (
+    <div className="vue">
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          onClick={surFermer}
+          aria-label="Annuler et revenir"
+          className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+        >
+          <ChevronLeft size={22} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-extrabold tracking-tight leading-tight">
+            {initial ? "Modifier le programme" : "Nouveau programme"}
+          </h2>
+          <p className="text-brume text-xs mt-0.5">Compose tes séances selon l’envie</p>
+        </div>
+      </div>
+
+      <label className="block mb-5">
+        <span className="text-xs uppercase tracking-widest text-brume font-bold block mb-2">
+          Nom du programme
+        </span>
+        <input
+          type="text"
+          value={nom}
+          onChange={(e) => setNom(e.target.value)}
+          placeholder="Ex. : Spécial jambes, Semaine légère…"
+          className="w-full rounded-2xl bg-carte border border-ligne px-4 font-bold text-base outline-none placeholder-slate-600 focus:border-slate-500"
+          style={{ height: 52 }}
+        />
+      </label>
+
+      <div className="space-y-4">
+        {seances.map((s, i) => (
+          <section key={i} className="rounded-2xl bg-carte border border-ligne p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="h-9 w-9 rounded-xl bg-accent-soft text-accent flex items-center justify-center font-extrabold shrink-0 transi">
+                {i + 1}
+              </span>
+              <input
+                type="text"
+                value={s.nom}
+                onChange={(e) => majSeance(i, { nom: e.target.value })}
+                placeholder={`Séance ${i + 1}`}
+                className="flex-1 min-w-0 rounded-xl bg-carte2 px-3 font-bold text-sm outline-none placeholder-slate-600"
+                style={{ height: 44 }}
+                aria-label={`Nom de la séance ${i + 1}`}
+              />
+              {seances.length > 1 && (
+                <button
+                  onClick={() => setSeances((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label={`Retirer la séance ${i + 1}`}
+                  className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center shrink-0 active:scale-95 transi"
+                >
+                  <X size={17} className="text-brume" />
+                </button>
+              )}
+            </div>
+
+            {ZONES.map(([zone, ids]) => (
+              <div key={zone} className="mb-2.5">
+                <p className="text-xs text-brume font-bold mb-1.5">{zone}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ids.map((exoId) => {
+                    const choisi = s.exoIds.includes(exoId);
+                    return (
+                      <button
+                        key={exoId}
+                        onClick={() => basculerExo(i, exoId)}
+                        aria-pressed={choisi}
+                        className={`px-3 rounded-xl text-xs font-bold transi ${
+                          choisi ? "bg-accent text-accent-ink" : "bg-carte2 text-douce active:scale-95"
+                        }`}
+                        style={{ height: 40 }}
+                      >
+                        {EXOS[exoId].nom.split(",")[0]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-brume text-xs mt-2 chiffres">
+              {s.exoIds.length} exercice{s.exoIds.length > 1 ? "s" : ""} — l’échauffement, le cardio
+              et les étirements sont ajoutés automatiquement.
+            </p>
+          </section>
+        ))}
+      </div>
+
+      {seances.length < 5 && (
+        <button
+          onClick={() => setSeances((prev) => [...prev, { nom: `Séance ${prev.length + 1}`, exoIds: [] }])}
+          className="mt-3 w-full h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+        >
+          <Plus size={17} /> Ajouter une séance
+        </button>
+      )}
+
+      <button
+        onClick={() => surSauver({ nom, seances })}
+        disabled={!valide}
+        className={`mt-6 w-full rounded-2xl font-extrabold text-base transi ${
+          valide ? "bg-accent text-accent-ink active:scale-98" : "bg-carte text-brume"
+        }`}
+        style={{ height: 56 }}
+      >
+        {valide ? "Enregistrer le programme" : "Choisis au moins un exercice par séance"}
+      </button>
+
+      {surSupprimer && (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <span className="text-brume text-xs">Supprimer ce programme :</span>
+          <BoutonSuppression etiquette="Supprimer le programme" surConfirmer={surSupprimer} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Vue séance détaillée                                                */
 /* ------------------------------------------------------------------ */
 
-function VueSeance({ seance, profil, checks, charges, surRetour, surCoche, surCharge, surRepos, surFin }) {
+function VueSeance({
+  seance, profil, checks, charges, faiteCetteSemaine,
+  surRetour, surCoche, surCharge, surRepos, surFin, surAnnuler,
+}) {
   const etapes = [
     { id: "echauffement" },
     ...seance.exos.map((e) => ({ id: e.id })),
@@ -1211,6 +1786,22 @@ function VueSeance({ seance, profil, checks, charges, surRetour, surCoche, surCh
           <p className="text-brume text-xs mt-0.5">45–60 min · {seance.sousTitre}</p>
         </div>
       </div>
+
+      {/* séance déjà validée cette semaine */}
+      {faiteCetteSemaine && (
+        <div className="rounded-2xl bg-carte border bordure-accent-douce p-4 mb-4 flex items-center gap-3">
+          <span className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center shrink-0 transi">
+            <Check size={20} strokeWidth={3} className="text-accent-ink" />
+          </span>
+          <p className="flex-1 text-sm font-bold">Validée cette semaine</p>
+          <button
+            onClick={surAnnuler}
+            className="h-11 px-3 rounded-xl bg-carte2 text-xs font-bold text-douce active:scale-95 transi"
+          >
+            Annuler la validation
+          </button>
+        </div>
+      )}
 
       {/* progression */}
       <div className="mb-5">
