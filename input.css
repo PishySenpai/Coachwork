@@ -27,15 +27,38 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* clip plutôt que hidden : bloque le débordement horizontal sans casser
-   la molette desktop ni le scroll en PWA standalone */
+/* Coquille applicative : le document ne défile jamais (fini le rebond iOS
+   et le scroll horizontal fantôme) ; seul .coquille défile, verticalement. */
 html, body {
-  overflow-x: clip;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
-@media (pointer: coarse) {
-  html, body {
-    overscroll-behavior-y: contain;
+.coquille {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@supports (height: 100dvh) {
+  .coquille {
+    height: 100dvh;
   }
+}
+/* fond gelé quand une feuille / un sélecteur est ouvert */
+body.fige .coquille {
+  overflow-y: hidden;
+}
+/* marge sous la barre d'état iPhone pour les vues plein écran */
+.coussin-haut {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+/* conteneurs défilants internes : pas d'enchaînement vers le fond */
+.defile {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* barre flottante du minuteur : au-dessus du home indicator iPhone */
@@ -50,6 +73,8 @@ html, body {
 .roue {
   overflow-y: auto;
   scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 32%, black 68%, transparent);

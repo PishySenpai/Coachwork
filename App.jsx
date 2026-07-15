@@ -1350,7 +1350,7 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
 function EcranVerrou({ profil, erreur, occupe, surValider }) {
   const [code, setCode] = useState("");
   return (
-    <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta flex items-center justify-center px-6">
+    <div data-profil={profil} className="coquille bg-fond text-encre font-jakarta flex items-center justify-center px-6">
       <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-8 text-center vue">
         <span className="mx-auto h-16 w-16 rounded-2xl bg-accent flex items-center justify-center">
           <Dumbbell size={30} className="text-accent-ink" strokeWidth={2.5} />
@@ -1390,6 +1390,19 @@ function EcranVerrou({ profil, erreur, occupe, surValider }) {
       </div>
     </div>
   );
+}
+
+/* Gèle le défilement du fond tant qu'une feuille ou un sélecteur est ouvert */
+let nbVerrousScroll = 0;
+function useVerrouScroll() {
+  useEffect(() => {
+    nbVerrousScroll++;
+    document.body.classList.add("fige");
+    return () => {
+      nbVerrousScroll--;
+      if (nbVerrousScroll <= 0) document.body.classList.remove("fige");
+    };
+  }, []);
 }
 
 /* Bouton de suppression en deux temps (pas de fenêtre de confirmation) */
@@ -1578,8 +1591,9 @@ export default function App() {
     annulerPushRepos();
   }
 
+  const defileur = useRef(null);
   useEffect(() => {
-    window.scrollTo({ top: 0 });
+    if (defileur.current) defileur.current.scrollTo({ top: 0 });
   }, [ouverte, onglet, edition]);
 
   /* ---- exercices & programmes ---- */
@@ -1770,7 +1784,7 @@ export default function App() {
   /* ---- écran de chargement ---- */
   if (chargement) {
     return (
-      <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-4">
+      <div data-profil={profil} className="coquille bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-4">
         <Dumbbell size={40} className="text-accent pulsation" />
         <p className="text-brume text-sm">Chargement de vos séances…</p>
       </div>
@@ -1780,7 +1794,7 @@ export default function App() {
   const seanceOuverte = toutesSeances.find((s) => s.id === ouverte) || null;
 
   return (
-    <div data-profil={profil} className="min-h-screen bg-fond text-encre font-jakarta">
+    <div ref={defileur} data-profil={profil} className="coquille bg-fond text-encre font-jakarta">
       <div className="mx-auto max-w-md px-4 pb-32">
 
         {/* ---------- en-tête ---------- */}
@@ -2606,6 +2620,7 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
   const [zone, setZone] = useState(null); // null = toutes
   const [form, setForm] = useState(undefined); // undefined ferm\u00e9 \u00b7 null nouveau \u00b7 objet = \u00e9dition
 
+  useVerrouScroll();
   const normalise = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const rq = normalise(recherche.trim());
 
@@ -2619,7 +2634,7 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
     .filter((s) => s.exos.length > 0);
 
   return (
-    <div className="fixed inset-0 z-50 bg-fond flex flex-col">
+    <div className="fixed inset-0 z-50 bg-fond flex flex-col coussin-haut">
       <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col px-4">
         <div className="flex items-center gap-3 pt-5 pb-3">
           <div className="flex-1 min-w-0">
@@ -2668,7 +2683,7 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-8 space-y-4">
+        <div className="flex-1 overflow-y-auto pb-8 space-y-4 defile">
           <button
             onClick={() => setForm(null)}
             className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
@@ -2766,6 +2781,7 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
 
 /* Formulaire de création / édition d'un exercice personnalisé */
 function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
+  useVerrouScroll();
   const [nom, setNom] = useState(initial ? initial.nom : "");
   const [zone, setZone] = useState(initial ? initial.zone : "Jambes & fessiers");
   const [muscles, setMuscles] = useState(initial ? initial.muscles || [] : MUSCLES_PAR_ZONE["Jambes & fessiers"]);
@@ -2808,7 +2824,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
   const etiquette = "text-xs uppercase tracking-widest text-brume font-bold block mb-2";
 
   return (
-    <div className="fixed inset-0 z-50 bg-fond overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-fond overflow-y-auto defile coussin-haut">
       <div className="mx-auto w-full max-w-md px-4 pb-10">
         <div className="flex items-center gap-3 pt-5 pb-4">
           <button
@@ -3190,6 +3206,7 @@ function Roue({ valeurs, index, surIndex, largeur = 80 }) {
 }
 
 function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
+  useVerrouScroll();
   const nombre = parseFloat(String(valeurInitiale).replace(",", "."));
   const initEntier = Number.isFinite(nombre) ? Math.max(0, Math.min(300, Math.floor(nombre))) : 20;
   const initDec = Number.isFinite(nombre) && Math.round((nombre % 1) * 10) >= 3 ? 1 : 0;
