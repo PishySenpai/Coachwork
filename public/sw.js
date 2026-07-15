@@ -25,6 +25,21 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) {}
+  e.waitUntil(
+    self.registration.showNotification(d.titre || "Coachwork", {
+      body: d.corps || "",
+      tag: "coachwork-repos",
+      renotify: true,
+      icon: "/icone-192.png",
+      badge: "/icone-192.png",
+      vibrate: [150, 90, 150],
+    })
+  );
+});
+
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   e.waitUntil(

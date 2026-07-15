@@ -204,6 +204,75 @@ async function fermerNotifications() {
   } catch (e) {}
 }
 
+/* --- Web Push : le serveur envoie la notification de fin de repos à
+   l'heure exacte, même si l'app est en arrière-plan ou fermée --- */
+
+let clePushPublique = null;
+
+function base64VersUint8(base64) {
+  const rembourrage = "=".repeat((4 - (base64.length % 4)) % 4);
+  const propre = (base64 + rembourrage).replace(/-/g, "+").replace(/_/g, "/");
+  const brut = atob(propre);
+  return Uint8Array.from(brut, (c) => c.charCodeAt(0));
+}
+
+async function abonnementPush() {
+  try {
+    if (!syncDisponible || !("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+    if (!("Notification" in window) || Notification.permission !== "granted") return null;
+    const reg = await navigator.serviceWorker.ready;
+    let ab = await reg.pushManager.getSubscription();
+    if (!ab) {
+      if (!clePushPublique) {
+        const r = await fetch("/api/push-cle", { headers: entetesSync(false) });
+        if (!r.ok) return null;
+        clePushPublique = (await r.json()).cle;
+      }
+      ab = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64VersUint8(clePushPublique),
+      });
+    }
+    return ab;
+  } catch (e) {
+    return null;
+  }
+}
+
+function jetonAleatoire() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function planifierPushRepos(finA, corps) {
+  try {
+    const ab = await abonnementPush();
+    if (!ab) return;
+    fetch("/api/repos", {
+      method: "POST",
+      headers: entetesSync(true),
+      body: JSON.stringify({
+        abonnement: ab.toJSON(),
+        finA,
+        jeton: jetonAleatoire(),
+        titre: "Repos terminé — à toi !",
+        corps,
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+async function annulerPushRepos() {
+  try {
+    const ab = await abonnementPush();
+    if (!ab) return;
+    fetch("/api/repos", {
+      method: "POST",
+      headers: entetesSync(true),
+      body: JSON.stringify({ abonnement: { endpoint: ab.endpoint }, annuler: true, jeton: jetonAleatoire() }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 /* Migration : l'ancien profil « maman » devient « valerie » */
 const ANCIENS_PROFILS = { valerie: "maman" };
 
@@ -1490,6 +1559,7 @@ export default function App() {
     const finA = Date.now() + exo.repos * 1000;
     setMinuteur({ finA, total: exo.repos, label: exo.nom });
     notifier("Repos en cours", `${exo.nom} — fin à ${heureCourte(finA)}`, { silent: true });
+    planifierPushRepos(finA, exo.nom);
   }
 
   function prolongerRepos() {
@@ -1497,6 +1567,7 @@ export default function App() {
       if (!c) return c;
       const finA = Math.max(c.finA, Date.now()) + 30000;
       notifier("Repos en cours", `${c.label} — fin à ${heureCourte(finA)}`, { silent: true });
+      planifierPushRepos(finA, c.label);
       return { ...c, finA, total: c.total + 30 };
     });
   }
@@ -1504,6 +1575,7 @@ export default function App() {
   function arreterRepos() {
     setMinuteur(null);
     fermerNotifications();
+    annulerPushRepos();
   }
 
   useEffect(() => {
