@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
-  Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2,
+  Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
+  ChevronUp, Copy, SquarePen,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -243,7 +244,7 @@ const EXOS = {
   presse: {
     id: "presse",
     nom: "Presse à cuisses",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 3,
     reps: "12",
     repos: 90,
@@ -255,7 +256,7 @@ const EXOS = {
   goblet: {
     id: "goblet",
     nom: "Goblet squat",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 3,
     reps: "12",
     repos: 90,
@@ -266,7 +267,7 @@ const EXOS = {
   "souleve-roumain": {
     id: "souleve-roumain",
     nom: "Soulevé de terre roumain, haltères",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 3,
     reps: "12",
     repos: 90,
@@ -278,7 +279,7 @@ const EXOS = {
   "leg-curl": {
     id: "leg-curl",
     nom: "Leg curl assis",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 2,
     reps: "12",
     repos: 60,
@@ -289,7 +290,7 @@ const EXOS = {
   "leg-extension": {
     id: "leg-extension",
     nom: "Leg extension",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 2,
     reps: "15",
     repos: 60,
@@ -300,7 +301,7 @@ const EXOS = {
   "hip-thrust": {
     id: "hip-thrust",
     nom: "Pont fessier (hip thrust)",
-    zone: "Jambes",
+    zone: "Jambes & fessiers",
     series: 3,
     reps: "15",
     repos: 60,
@@ -315,7 +316,7 @@ const EXOS = {
   "dev-poitrine": {
     id: "dev-poitrine",
     nom: "Développé poitrine assis",
-    zone: "Poussée",
+    zone: "Poitrine",
     series: 3,
     reps: "10",
     repos: 90,
@@ -326,7 +327,7 @@ const EXOS = {
   "dev-epaules": {
     id: "dev-epaules",
     nom: "Développé épaules assis",
-    zone: "Poussée",
+    zone: "Épaules",
     series: 3,
     reps: "10",
     repos: 90,
@@ -337,7 +338,7 @@ const EXOS = {
   pompes: {
     id: "pompes",
     nom: "Pompes mains surélevées",
-    zone: "Poussée",
+    zone: "Poitrine",
     series: 3,
     reps: "8–12",
     repos: 90,
@@ -353,7 +354,7 @@ const EXOS = {
   "tirage-vertical": {
     id: "tirage-vertical",
     nom: "Tirage vertical",
-    zone: "Tirage",
+    zone: "Dos",
     series: 3,
     reps: "10",
     repos: 90,
@@ -364,7 +365,7 @@ const EXOS = {
   rowing: {
     id: "rowing",
     nom: "Rowing assis machine",
-    zone: "Tirage",
+    zone: "Dos",
     series: 3,
     reps: "12",
     repos: 90,
@@ -375,7 +376,7 @@ const EXOS = {
   "tirage-horizontal": {
     id: "tirage-horizontal",
     nom: "Tirage horizontal à la poulie",
-    zone: "Tirage",
+    zone: "Dos",
     series: 3,
     reps: "12",
     repos: 90,
@@ -386,7 +387,7 @@ const EXOS = {
   planche: {
     id: "planche",
     nom: "Planche",
-    zone: "Gainage",
+    zone: "Abdos & gainage",
     series: 3,
     reps: "20–40 s",
     repos: 60,
@@ -398,7 +399,7 @@ const EXOS = {
   "dead-bug": {
     id: "dead-bug",
     nom: "Dead bug",
-    zone: "Gainage",
+    zone: "Abdos & gainage",
     series: 3,
     reps: "8 / côté",
     repos: 60,
@@ -410,7 +411,7 @@ const EXOS = {
   "planche-laterale": {
     id: "planche-laterale",
     nom: "Planche latérale",
-    zone: "Gainage",
+    zone: "Abdos & gainage",
     series: 2,
     reps: "15–25 s / côté",
     repos: 60,
@@ -419,16 +420,299 @@ const EXOS = {
     variante: "Trop facile ? Lève le bras libre vers le plafond.",
     conseil: "Hanches hautes, corps en ligne droite des épaules aux pieds (ou aux genoux).",
   },
+  "squat-barre": {
+    id: "squat-barre",
+    nom: "Squat à la barre guidée (Smith)",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "Barre seule pour apprendre, puis +2,5 kg par côté", valerie: "Barre de la Smith seule, amplitude confortable" },
+    variante: "Goblet squat si la barre impressionne encore.",
+    conseil:
+      "Pieds légèrement ouverts, descends comme pour t’asseoir, talons ancrés. La barre guidée sécurise la trajectoire.",
+  },
+  fentes: {
+    id: "fentes",
+    nom: "Fentes sur place, haltères",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "8 / jambe",
+    repos: 90,
+    charge: { esteban: "2 haltères de 6–10 kg", valerie: "Poids du corps, une main sur un support" },
+    variante: "Fentes arrière, plus douces pour les genoux.",
+    conseil:
+      "Grand pas, buste droit, le genou avant reste au-dessus de la cheville. Le genou arrière descend vers le sol.",
+  },
+  abduction: {
+    id: "abduction",
+    nom: "Abduction de hanches (machine)",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "15",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 35–50 kg", valerie: "Départ conseillé : 15–25 kg" },
+    variante: "Avec un élastique au-dessus des genoux si la machine est prise.",
+    conseil: "Pousse les genoux vers l’extérieur sans décoller le dos du dossier, reviens lentement.",
+  },
+  adduction: {
+    id: "adduction",
+    nom: "Adduction de hanches (machine)",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "15",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 30–45 kg", valerie: "Départ conseillé : 15–20 kg" },
+    variante: "Serre un ballon entre les genoux, allongée, à défaut.",
+    conseil: "Serre en 1 seconde, retiens 2–3 secondes au retour. Sans à-coups.",
+  },
+  "kickback-fessier": {
+    id: "kickback-fessier",
+    nom: "Kickback fessier à la poulie",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "12 / jambe",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 10–15 kg", valerie: "Départ conseillé : 5–7,5 kg" },
+    variante: "À quatre pattes au sol (donkey kick), sans poulie.",
+    conseil: "Sangle à la cheville, jambe qui pousse vers l’arrière, serre le fessier 1 s. Sans cambrer le dos.",
+  },
+  mollets: {
+    id: "mollets",
+    nom: "Mollets debout",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "15",
+    repos: 45,
+    charge: { esteban: "Machine +20–40 kg, ou poids du corps sur une marche", valerie: "Poids du corps sur une marche, en te tenant" },
+    variante: "Version assise pour varier l’angle.",
+    conseil: "Monte haut sur la pointe, marque 1 s en haut, laisse le talon descendre bien bas.",
+  },
+  "dev-couche": {
+    id: "dev-couche",
+    nom: "Développé couché, haltères",
+    zone: "Poitrine",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 3–5 kg" },
+    variante: "À la barre quand le geste est bien acquis.",
+    conseil:
+      "Pieds au sol, omoplates serrées, descends les haltères au niveau de la poitrine, coudes à environ 45°.",
+  },
+  "dev-incline": {
+    id: "dev-incline",
+    nom: "Développé incliné (machine ou haltères)",
+    zone: "Poitrine",
+    series: 3,
+    reps: "10",
+    repos: 90,
+    charge: { esteban: "15–25 kg machine, ou 2 haltères de 8–12 kg", valerie: "5–10 kg machine, ou 2 haltères de 3–4 kg" },
+    variante: "Pompes pieds au sol, mains sur banc incliné.",
+    conseil: "Banc entre 30 et 45°. Vise le haut de la poitrine, sans cambrer le bas du dos.",
+  },
+  ecarte: {
+    id: "ecarte",
+    nom: "Écarté à la poulie (ou pec deck)",
+    zone: "Poitrine",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 10–15 kg par côté", valerie: "Départ conseillé : 5–7,5 kg par côté" },
+    variante: "Pec deck (machine papillon), plus guidé.",
+    conseil: "Bras presque tendus, grand mouvement d’accolade. Reste léger : c’est un exercice de finition.",
+  },
+  dips: {
+    id: "dips",
+    nom: "Dips assistés (machine)",
+    zone: "Poitrine",
+    series: 3,
+    reps: "8",
+    repos: 90,
+    charge: { esteban: "Assistance moyenne (–20 à –30 kg)", valerie: "Assistance forte (–35 kg et plus)" },
+    variante: "Ou pompes sur banc si la machine manque.",
+    conseil: "Penche-toi légèrement en avant, descends jusqu’à 90° aux coudes — pas plus bas.",
+  },
+  "elevations-laterales": {
+    id: "elevations-laterales",
+    nom: "Élévations latérales, haltères",
+    zone: "Épaules",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "2 haltères de 4–6 kg", valerie: "2 haltères de 2–3 kg" },
+    variante: "À la poulie basse, un bras à la fois.",
+    conseil: "Coudes à peine fléchis, monte jusqu’à l’horizontale, redescends en 2 s. Léger, toujours.",
+  },
+  oiseau: {
+    id: "oiseau",
+    nom: "Oiseau, buste penché",
+    zone: "Épaules",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "2 haltères de 4–6 kg", valerie: "2 haltères de 2–3 kg" },
+    variante: "Machine reverse fly (papillon inversé).",
+    conseil: "Buste penché, dos plat, écarte les bras comme des ailes — sans élan. Arrière d’épaule et posture.",
+  },
+  "face-pull": {
+    id: "face-pull",
+    nom: "Face pull à la corde",
+    zone: "Épaules",
+    series: 3,
+    reps: "15",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 10–15 kg", valerie: "Départ conseillé : 5–7,5 kg" },
+    variante: "Oiseau aux haltères à défaut de poulie.",
+    conseil: "Poulie à hauteur du visage, tire la corde vers le front en écartant les mains, coudes hauts. Excellent pour la posture.",
+  },
+  shrugs: {
+    id: "shrugs",
+    nom: "Shrugs (haussements), haltères",
+    zone: "Épaules",
+    series: 2,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
+    variante: "À la barre ou à la Smith machine.",
+    conseil: "Hausse les épaules droit vers les oreilles, marque 1 s, redescends. Sans rouler les épaules.",
+  },
+  "traction-assistee": {
+    id: "traction-assistee",
+    nom: "Tractions assistées (machine)",
+    zone: "Dos",
+    series: 3,
+    reps: "6–8",
+    repos: 90,
+    charge: { esteban: "Assistance –25 à –35 kg", valerie: "Assistance –45 kg et plus" },
+    variante: "Tirage vertical si la machine manque.",
+    conseil: "Prise un peu plus large que les épaules, tire la poitrine vers la barre, redescends bras presque tendus.",
+  },
+  "rowing-haltere": {
+    id: "rowing-haltere",
+    nom: "Rowing un bras, haltère",
+    zone: "Dos",
+    series: 3,
+    reps: "10 / bras",
+    repos: 90,
+    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–6 kg" },
+    variante: "Rowing assis machine pour un geste plus guidé.",
+    conseil: "Main et genou sur le banc, dos plat. Tire le coude vers la hanche, sans tourner le buste.",
+  },
+  "curl-biceps": {
+    id: "curl-biceps",
+    nom: "Curl biceps, haltères",
+    zone: "Bras",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "2 haltères de 6–10 kg", valerie: "2 haltères de 2–4 kg" },
+    variante: "À la poulie basse pour une tension continue.",
+    conseil: "Coudes collés au buste, redescends complètement et lentement — c’est la descente qui construit.",
+  },
+  "curl-marteau": {
+    id: "curl-marteau",
+    nom: "Curl marteau",
+    zone: "Bras",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "2 haltères de 6–10 kg", valerie: "2 haltères de 2–4 kg" },
+    variante: "En alternant les bras pour rester propre.",
+    conseil: "Paumes face à face, comme si tu plantais un clou. Zéro élan, zéro balancement.",
+  },
+  "triceps-poulie": {
+    id: "triceps-poulie",
+    nom: "Extension triceps à la poulie",
+    zone: "Bras",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
+    variante: "Corde (finition poignets vers le bas) ou barre courte.",
+    conseil: "Coudes soudés au buste, tends complètement les bras, remonte lentement.",
+  },
+  crunch: {
+    id: "crunch",
+    nom: "Crunch au sol",
+    zone: "Abdos & gainage",
+    series: 3,
+    reps: "15",
+    repos: 45,
+    sansCharge: true,
+    charge: { esteban: "Mains aux tempes", valerie: "Bras tendus vers les genoux" },
+    variante: "À la machine à abdos si tu préfères doser une charge.",
+    conseil: "Décolle seulement le haut du dos, souffle en montant. Petit mouvement, grande contraction.",
+  },
+  "releve-genoux": {
+    id: "releve-genoux",
+    nom: "Relevé de genoux",
+    zone: "Abdos & gainage",
+    series: 3,
+    reps: "10",
+    repos: 60,
+    sansCharge: true,
+    charge: { esteban: "À la chaise romaine", valerie: "Assise au bord d’un banc, mains derrière toi" },
+    variante: "Jambes tendues quand les genoux deviennent faciles.",
+    conseil: "Remonte les genoux vers la poitrine sans te balancer, redescends lentement.",
+  },
+  "russian-twist": {
+    id: "russian-twist",
+    nom: "Rotation russe",
+    zone: "Abdos & gainage",
+    series: 3,
+    reps: "10 / côté",
+    repos: 45,
+    charge: { esteban: "Disque ou haltère de 2,5–5 kg", valerie: "Sans poids d’abord, mains jointes" },
+    variante: "Pieds au sol pour commencer, décollés ensuite.",
+    conseil: "Assis, buste légèrement incliné, tourne les épaules — pas seulement les bras.",
+  },
+  "mountain-climbers": {
+    id: "mountain-climbers",
+    nom: "Mountain climbers",
+    zone: "Abdos & gainage",
+    series: 3,
+    reps: "20 s",
+    repos: 45,
+    sansCharge: true,
+    charge: { esteban: "Rythme soutenu", valerie: "Rythme lent, hanches bien stables" },
+    variante: "Mains sur un banc pour une version plus douce.",
+    conseil: "Position de pompe, ramène les genoux l’un après l’autre en gardant les hanches basses. Cardio et gainage à la fois.",
+  },
+  "extension-lombaire": {
+    id: "extension-lombaire",
+    nom: "Extension lombaire (banc à 45°)",
+    zone: "Abdos & gainage",
+    series: 2,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Poids du corps, puis un disque de 5 kg contre la poitrine", valerie: "Poids du corps, amplitude réduite" },
+    variante: "Superman au sol à défaut de banc.",
+    conseil: "Remonte jusqu’à l’alignement du corps, pas plus haut. Lentement — le bas du dos aime la douceur.",
+  },
+  superman: {
+    id: "superman",
+    nom: "Superman au sol",
+    zone: "Abdos & gainage",
+    series: 2,
+    reps: "10",
+    repos: 45,
+    sansCharge: true,
+    charge: { esteban: "Tiens 2 s en haut", valerie: "Bras et jambe opposés en alternance" },
+    variante: "Sur un tapis, coussin sous les hanches si besoin.",
+    conseil: "Allongé sur le ventre, décolle bras et jambes de quelques centimètres, regard vers le sol.",
+  },
 };
 
-/* Ordre logique d'une séance : jambes d'abord, gainage à la fin */
+/* Catalogue par zone (ordre d'affichage dans le sélecteur) */
 const ZONES = [
-  ["Jambes", ["presse", "goblet", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust"]],
-  ["Poussée", ["dev-poitrine", "dev-epaules", "pompes"]],
-  ["Tirage", ["tirage-vertical", "rowing", "tirage-horizontal"]],
-  ["Gainage", ["planche", "dead-bug", "planche-laterale"]],
+  ["Jambes & fessiers", ["presse", "squat-barre", "goblet", "fentes", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust", "abduction", "adduction", "kickback-fessier", "mollets"]],
+  ["Poitrine", ["dev-poitrine", "dev-couche", "dev-incline", "pompes", "ecarte", "dips"]],
+  ["Épaules", ["dev-epaules", "elevations-laterales", "oiseau", "face-pull", "shrugs"]],
+  ["Dos", ["tirage-vertical", "traction-assistee", "rowing", "tirage-horizontal", "rowing-haltere"]],
+  ["Bras", ["curl-biceps", "curl-marteau", "triceps-poulie"]],
+  ["Abdos & gainage", ["planche", "planche-laterale", "dead-bug", "crunch", "releve-genoux", "russian-twist", "mountain-climbers", "extension-lombaire", "superman"]],
 ];
-const ORDRE_EXOS = ZONES.flatMap(([, ids]) => ids);
 
 /* ------------------------------------------------------------------ */
 /* Programmes                                                          */
@@ -1104,7 +1388,7 @@ export default function App() {
       nom: brouillon.nom.trim() || "Mon programme",
       seances: brouillon.seances.map((s, i) => ({
         nom: s.nom.trim() || `Séance ${i + 1}`,
-        exoIds: [...s.exoIds].sort((a, b) => ORDRE_EXOS.indexOf(a) - ORDRE_EXOS.indexOf(b)),
+        exoIds: [...s.exoIds],
       })),
     };
     const liste = idExistant
@@ -1736,11 +2020,63 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
 function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
   const [nom, setNom] = useState(initial ? initial.nom : "");
   const [seances, setSeances] = useState(
-    initial
-      ? initial.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] }))
-      : [{ nom: "Séance 1", exoIds: [] }]
+    initial ? initial.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] })) : null
   );
+  const [selecteur, setSelecteur] = useState(null); // index de la séance en cours d'ajout
 
+  /* ----- étape 1 (nouveau programme) : choisir un point de départ ----- */
+  if (!seances) {
+    const modeles = [
+      {
+        icone: SquarePen,
+        titre: "Partir de zéro",
+        detail: "Compose tes séances librement, exercice par exercice.",
+        seances: [{ nom: "Séance 1", exoIds: [] }],
+      },
+      ...PROGRAMMES_BASE.map((p) => ({
+        icone: Copy,
+        titre: `Copier « ${p.nom} »`,
+        detail: "Repars des séances existantes, puis remplace ou ajoute ce que tu veux.",
+        seances: p.seances.map((s) => ({ nom: s.titre, exoIds: s.exos.map((e) => e.id) })),
+      })),
+    ];
+    return (
+      <div className="vue">
+        <div className="flex items-center gap-3 mb-5">
+          <button
+            onClick={surFermer}
+            aria-label="Annuler et revenir"
+            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-extrabold tracking-tight leading-tight">Nouveau programme</h2>
+            <p className="text-brume text-xs mt-0.5">Comment veux-tu démarrer ?</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {modeles.map((m) => (
+            <button
+              key={m.titre}
+              onClick={() => setSeances(m.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] })))}
+              className="w-full rounded-2xl bg-carte border border-ligne p-4 flex items-center gap-4 text-left active:scale-98 transi"
+            >
+              <span className="h-12 w-12 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+                <m.icone size={21} className="text-accent transi" />
+              </span>
+              <span className="min-w-0">
+                <span className="font-bold text-base block">{m.titre}</span>
+                <span className="text-brume text-xs block mt-0.5 leading-relaxed">{m.detail}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* ----- étape 2 : composer ----- */
   const valide = seances.length >= 1 && seances.every((s) => s.exoIds.length >= 1);
 
   function majSeance(i, patch) {
@@ -1754,6 +2090,19 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
         const exoIds = s.exoIds.includes(exoId)
           ? s.exoIds.filter((e) => e !== exoId)
           : [...s.exoIds, exoId];
+        return { ...s, exoIds };
+      })
+    );
+  }
+
+  function deplacerExo(i, idx, dir) {
+    setSeances((prev) =>
+      prev.map((s, j) => {
+        if (j !== i) return s;
+        const k = idx + dir;
+        if (k < 0 || k >= s.exoIds.length) return s;
+        const exoIds = [...s.exoIds];
+        [exoIds[idx], exoIds[k]] = [exoIds[k], exoIds[idx]];
         return { ...s, exoIds };
       })
     );
@@ -1773,7 +2122,7 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
           <h2 className="text-xl font-extrabold tracking-tight leading-tight">
             {initial ? "Modifier le programme" : "Nouveau programme"}
           </h2>
-          <p className="text-brume text-xs mt-0.5">Compose tes séances selon l’envie</p>
+          <p className="text-brume text-xs mt-0.5">Les exercices s’enchaînent dans l’ordre affiché</p>
         </div>
       </div>
 
@@ -1818,32 +2167,59 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
               )}
             </div>
 
-            {ZONES.map(([zone, ids]) => (
-              <div key={zone} className="mb-2.5">
-                <p className="text-xs text-brume font-bold mb-1.5">{zone}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ids.map((exoId) => {
-                    const choisi = s.exoIds.includes(exoId);
-                    return (
+            {s.exoIds.length === 0 ? (
+              <p className="text-brume text-sm text-center py-4">
+                Aucun exercice pour l’instant — ajoute-en avec le bouton ci-dessous.
+              </p>
+            ) : (
+              <ol className="space-y-1.5 mb-1">
+                {s.exoIds.map((exoId, idx) => {
+                  const exo = EXOS[exoId];
+                  if (!exo) return null;
+                  return (
+                    <li key={exoId} className="rounded-xl bg-carte2 p-2 pl-3 flex items-center gap-2">
+                      <span className="text-brume text-xs chiffres shrink-0 w-4">{idx + 1}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="font-bold text-sm block truncate">{exo.nom}</span>
+                        <span className="text-brume text-xs block">{exo.series} × {exo.reps} · {exo.zone}</span>
+                      </span>
                       <button
-                        key={exoId}
-                        onClick={() => basculerExo(i, exoId)}
-                        aria-pressed={choisi}
-                        className={`px-3 rounded-xl text-xs font-bold transi ${
-                          choisi ? "bg-accent text-accent-ink" : "bg-carte2 text-douce active:scale-95"
-                        }`}
-                        style={{ height: 40 }}
+                        onClick={() => deplacerExo(i, idx, -1)}
+                        disabled={idx === 0}
+                        aria-label="Monter l’exercice"
+                        className={`h-10 w-9 rounded-lg flex items-center justify-center shrink-0 transi ${idx === 0 ? "opacity-25" : "active:scale-95"}`}
                       >
-                        {EXOS[exoId].nom.split(",")[0]}
+                        <ChevronUp size={18} className="text-brume" />
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            <p className="text-brume text-xs mt-2 chiffres">
-              {s.exoIds.length} exercice{s.exoIds.length > 1 ? "s" : ""} — l’échauffement, le cardio
-              et les étirements sont ajoutés automatiquement.
+                      <button
+                        onClick={() => deplacerExo(i, idx, 1)}
+                        disabled={idx === s.exoIds.length - 1}
+                        aria-label="Descendre l’exercice"
+                        className={`h-10 w-9 rounded-lg flex items-center justify-center shrink-0 transi ${idx === s.exoIds.length - 1 ? "opacity-25" : "active:scale-95"}`}
+                      >
+                        <ChevronDown size={18} className="text-brume" />
+                      </button>
+                      <button
+                        onClick={() => basculerExo(i, exoId)}
+                        aria-label={`Retirer ${exo.nom}`}
+                        className="h-10 w-9 rounded-lg flex items-center justify-center shrink-0 active:scale-95 transi"
+                      >
+                        <X size={17} className="text-rouge" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            <button
+              onClick={() => setSelecteur(i)}
+              className="mt-2 w-full h-12 rounded-xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+            >
+              <Plus size={17} className="text-accent transi" /> Ajouter un exercice
+            </button>
+            <p className="text-brume text-xs mt-2.5 leading-relaxed">
+              L’échauffement, le cardio et les étirements sont ajoutés automatiquement à chaque séance.
             </p>
           </section>
         ))}
@@ -1875,6 +2251,127 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
           <BoutonSuppression etiquette="Supprimer le programme" surConfirmer={surSupprimer} />
         </div>
       )}
+
+      {selecteur !== null && (
+        <SelecteurExos
+          nomSeance={seances[selecteur].nom || `Séance ${selecteur + 1}`}
+          exoIds={seances[selecteur].exoIds}
+          surBasculer={(exoId) => basculerExo(selecteur, exoId)}
+          surFermer={() => setSelecteur(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Sélecteur d'exercices plein écran : recherche + filtres par zone */
+function SelecteurExos({ nomSeance, exoIds, surBasculer, surFermer }) {
+  const [recherche, setRecherche] = useState("");
+  const [zone, setZone] = useState(null); // null = toutes
+
+  const normalise = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const rq = normalise(recherche.trim());
+
+  const sections = ZONES
+    .filter(([z]) => !zone || z === zone)
+    .map(([z, ids]) => ({
+      zone: z,
+      exos: ids.map((id) => EXOS[id]).filter((e) => !rq || normalise(e.nom).includes(rq)),
+    }))
+    .filter((s) => s.exos.length > 0);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-fond flex flex-col">
+      <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col px-4">
+        <div className="flex items-center gap-3 pt-5 pb-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-extrabold tracking-tight leading-tight">Ajouter des exercices</h2>
+            <p className="text-brume text-xs mt-0.5 truncate chiffres">
+              {nomSeance} · {exoIds.length} exercice{exoIds.length > 1 ? "s" : ""} choisi{exoIds.length > 1 ? "s" : ""}
+            </p>
+          </div>
+          <button
+            onClick={surFermer}
+            className="h-12 px-5 rounded-2xl bg-accent text-accent-ink font-extrabold shrink-0 active:scale-95 transi"
+          >
+            OK
+          </button>
+        </div>
+
+        <label className="flex items-center gap-2.5 rounded-2xl bg-carte border border-ligne px-4 shrink-0" style={{ height: 48 }}>
+          <Search size={18} className="text-brume shrink-0" />
+          <input
+            type="text"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            placeholder="Rechercher un exercice…"
+            className="w-full min-w-0 bg-transparent text-sm font-bold outline-none placeholder-slate-600"
+            aria-label="Rechercher un exercice"
+          />
+          {recherche && (
+            <button onClick={() => setRecherche("")} aria-label="Effacer la recherche" className="shrink-0">
+              <X size={16} className="text-brume" />
+            </button>
+          )}
+        </label>
+
+        <div className="flex flex-wrap gap-1.5 py-3 shrink-0">
+          {[null, ...ZONES.map(([z]) => z)].map((z) => (
+            <button
+              key={z || "toutes"}
+              onClick={() => setZone(z)}
+              className={`px-3 rounded-xl text-xs font-bold transi ${
+                zone === z ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+              }`}
+              style={{ height: 38 }}
+            >
+              {z || "Tout"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto pb-8 space-y-4">
+          {sections.length === 0 && (
+            <p className="text-brume text-sm text-center pt-8">Aucun exercice ne correspond à « {recherche} ».</p>
+          )}
+          {sections.map((sec) => (
+            <div key={sec.zone}>
+              <p className="text-xs uppercase tracking-widest text-brume font-bold mb-2">{sec.zone}</p>
+              <div className="space-y-2">
+                {sec.exos.map((exo) => {
+                  const choisi = exoIds.includes(exo.id);
+                  return (
+                    <button
+                      key={exo.id}
+                      onClick={() => surBasculer(exo.id)}
+                      aria-pressed={choisi}
+                      className={`w-full rounded-2xl border p-3 flex items-center gap-3 text-left transi ${
+                        choisi ? "bg-carte bordure-accent-douce" : "bg-carte border-ligne active:scale-98"
+                      }`}
+                    >
+                      <span className="flex-1 min-w-0">
+                        <span className="font-bold text-sm block leading-snug">{exo.nom}</span>
+                        <span className="text-brume text-xs block mt-0.5 chiffres">
+                          {exo.series} × {exo.reps} · repos {exo.repos} s
+                        </span>
+                      </span>
+                      <span
+                        className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transi ${
+                          choisi ? "bg-accent" : "bg-carte2"
+                        }`}
+                      >
+                        {choisi
+                          ? <Check size={18} strokeWidth={3.5} className="text-accent-ink pop" />
+                          : <Plus size={18} className="text-brume" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
