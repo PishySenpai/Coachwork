@@ -42,6 +42,11 @@ body {
 .bg-rouge-doux { background-color: rgba(248, 113, 113, 0.15); }
 .text-rouge { color: #f87171; }
 
+/* schéma musculaire */
+.schema-base { fill: #28323f; }
+.schema-actif { fill: var(--accent); transition: fill 0.2s ease; }
+.schema-texte { fill: #66748a; font-size: 10px; font-weight: 600; }
+
 /* ---------- transitions & animations ---------- */
 .transi {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,

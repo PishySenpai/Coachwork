@@ -715,6 +715,144 @@ const ZONES = [
 ];
 
 /* ------------------------------------------------------------------ */
+/* Muscles travaillés & schéma corporel                                */
+/* ------------------------------------------------------------------ */
+
+const MUSCLES_LIBELLES = {
+  quadriceps: "Quadriceps", ischios: "Ischio-jambiers", fessiers: "Fessiers",
+  abducteurs: "Abducteurs", adducteurs: "Adducteurs", mollets: "Mollets",
+  pectoraux: "Pectoraux", epaules: "Épaules", trapezes: "Trapèzes",
+  dorsaux: "Dorsaux", lombaires: "Lombaires", biceps: "Biceps",
+  triceps: "Triceps", "avant-bras": "Avant-bras", abdos: "Abdominaux", obliques: "Obliques",
+};
+
+const MUSCLES_PAR_ZONE = {
+  "Jambes & fessiers": ["quadriceps", "fessiers"],
+  Poitrine: ["pectoraux", "triceps"],
+  Épaules: ["epaules"],
+  Dos: ["dorsaux", "biceps"],
+  Bras: ["biceps"],
+  "Abdos & gainage": ["abdos"],
+};
+
+const MUSCLES_PAR_EXO = {
+  presse: ["quadriceps", "fessiers"],
+  "squat-barre": ["quadriceps", "fessiers"],
+  goblet: ["quadriceps", "fessiers", "abdos"],
+  fentes: ["quadriceps", "fessiers"],
+  "souleve-roumain": ["ischios", "fessiers", "lombaires"],
+  "leg-curl": ["ischios"],
+  "leg-extension": ["quadriceps"],
+  "hip-thrust": ["fessiers", "ischios"],
+  abduction: ["abducteurs", "fessiers"],
+  adduction: ["adducteurs"],
+  "kickback-fessier": ["fessiers"],
+  mollets: ["mollets"],
+  "dev-poitrine": ["pectoraux", "triceps", "epaules"],
+  "dev-couche": ["pectoraux", "triceps", "epaules"],
+  "dev-incline": ["pectoraux", "epaules", "triceps"],
+  pompes: ["pectoraux", "triceps", "abdos"],
+  ecarte: ["pectoraux"],
+  dips: ["pectoraux", "triceps"],
+  "dev-epaules": ["epaules", "triceps"],
+  "elevations-laterales": ["epaules"],
+  oiseau: ["epaules", "trapezes"],
+  "face-pull": ["epaules", "trapezes"],
+  shrugs: ["trapezes"],
+  "tirage-vertical": ["dorsaux", "biceps"],
+  "traction-assistee": ["dorsaux", "biceps"],
+  rowing: ["dorsaux", "trapezes", "biceps"],
+  "tirage-horizontal": ["dorsaux", "biceps"],
+  "rowing-haltere": ["dorsaux", "biceps"],
+  "curl-biceps": ["biceps", "avant-bras"],
+  "curl-marteau": ["biceps", "avant-bras"],
+  "triceps-poulie": ["triceps"],
+  planche: ["abdos", "lombaires", "epaules"],
+  "planche-laterale": ["obliques", "abdos"],
+  "dead-bug": ["abdos"],
+  crunch: ["abdos"],
+  "releve-genoux": ["abdos"],
+  "russian-twist": ["obliques", "abdos"],
+  "mountain-climbers": ["abdos", "quadriceps", "epaules"],
+  "extension-lombaire": ["lombaires", "fessiers", "ischios"],
+  superman: ["lombaires", "fessiers"],
+};
+for (const [id, m] of Object.entries(MUSCLES_PAR_EXO)) {
+  if (EXOS[id]) EXOS[id].muscles = m;
+}
+
+/* Silhouettes stylisées (face / dos) : chaque forme porte éventuellement
+   un identifiant de muscle, colorié en accent quand il travaille */
+const FORMES_FACE = [
+  { t: "c", cx: 54, cy: 15, r: 10 },
+  { t: "r", x: 48.5, y: 24, w: 11, h: 7, rx: 3 },
+  { m: "epaules", t: "c", cx: 33.5, cy: 39, r: 8 },
+  { m: "epaules", t: "c", cx: 74.5, cy: 39, r: 8 },
+  { m: "pectoraux", t: "r", x: 39, y: 33, w: 14.5, h: 16, rx: 5 },
+  { m: "pectoraux", t: "r", x: 54.5, y: 33, w: 14.5, h: 16, rx: 5 },
+  { m: "biceps", t: "r", x: 25, y: 48, w: 10, h: 21, rx: 5 },
+  { m: "biceps", t: "r", x: 73, y: 48, w: 10, h: 21, rx: 5 },
+  { m: "avant-bras", t: "r", x: 23, y: 71, w: 9, h: 19, rx: 4.5 },
+  { m: "avant-bras", t: "r", x: 76, y: 71, w: 9, h: 19, rx: 4.5 },
+  { m: "obliques", t: "r", x: 39, y: 51, w: 6.5, h: 25, rx: 3 },
+  { m: "obliques", t: "r", x: 62.5, y: 51, w: 6.5, h: 25, rx: 3 },
+  { m: "abdos", t: "r", x: 47, y: 51, w: 14, h: 27, rx: 5 },
+  { t: "r", x: 41, y: 80, w: 26, h: 11, rx: 5 },
+  { m: "abducteurs", t: "r", x: 35.5, y: 81, w: 5.5, h: 13, rx: 2.75 },
+  { m: "abducteurs", t: "r", x: 67, y: 81, w: 5.5, h: 13, rx: 2.75 },
+  { m: "quadriceps", t: "r", x: 40, y: 93, w: 11.5, h: 33, rx: 5.5 },
+  { m: "quadriceps", t: "r", x: 56.5, y: 93, w: 11.5, h: 33, rx: 5.5 },
+  { m: "adducteurs", t: "r", x: 52.5, y: 93, w: 3.5, h: 17, rx: 1.75 },
+  { t: "r", x: 41.5, y: 128, w: 9, h: 28, rx: 4.5 },
+  { t: "r", x: 57.5, y: 128, w: 9, h: 28, rx: 4.5 },
+  { t: "r", x: 40.5, y: 158, w: 11, h: 5, rx: 2.5 },
+  { t: "r", x: 56.5, y: 158, w: 11, h: 5, rx: 2.5 },
+];
+const FORMES_DOS = [
+  { t: "c", cx: 54, cy: 15, r: 10 },
+  { t: "r", x: 48.5, y: 24, w: 11, h: 7, rx: 3 },
+  { m: "trapezes", t: "r", x: 41, y: 29, w: 26, h: 11, rx: 5 },
+  { m: "epaules", t: "c", cx: 33.5, cy: 39, r: 8 },
+  { m: "epaules", t: "c", cx: 74.5, cy: 39, r: 8 },
+  { m: "dorsaux", t: "r", x: 39, y: 42, w: 14, h: 22, rx: 5 },
+  { m: "dorsaux", t: "r", x: 55, y: 42, w: 14, h: 22, rx: 5 },
+  { m: "triceps", t: "r", x: 25, y: 48, w: 10, h: 21, rx: 5 },
+  { m: "triceps", t: "r", x: 73, y: 48, w: 10, h: 21, rx: 5 },
+  { m: "avant-bras", t: "r", x: 23, y: 71, w: 9, h: 19, rx: 4.5 },
+  { m: "avant-bras", t: "r", x: 76, y: 71, w: 9, h: 19, rx: 4.5 },
+  { m: "lombaires", t: "r", x: 47, y: 66, w: 14, h: 13, rx: 4 },
+  { m: "fessiers", t: "r", x: 40, y: 81, w: 13, h: 14, rx: 5 },
+  { m: "fessiers", t: "r", x: 55, y: 81, w: 13, h: 14, rx: 5 },
+  { m: "ischios", t: "r", x: 40, y: 97, w: 11.5, h: 29, rx: 5.5 },
+  { m: "ischios", t: "r", x: 56.5, y: 97, w: 11.5, h: 29, rx: 5.5 },
+  { m: "mollets", t: "r", x: 41.5, y: 128, w: 9, h: 26, rx: 4.5 },
+  { m: "mollets", t: "r", x: 57.5, y: 128, w: 9, h: 26, rx: 4.5 },
+  { t: "r", x: 40.5, y: 158, w: 11, h: 5, rx: 2.5 },
+  { t: "r", x: 56.5, y: 158, w: 11, h: 5, rx: 2.5 },
+];
+
+function SchemaMuscles({ muscles = [], hauteur = 82 }) {
+  const actifs = new Set(muscles);
+  const rendre = (formes, dx) =>
+    formes.map((f, i) => {
+      const cls = f.m && actifs.has(f.m) ? "schema-actif" : "schema-base";
+      return f.t === "c" ? (
+        <circle key={i} cx={f.cx + dx} cy={f.cy} r={f.r} className={cls} />
+      ) : (
+        <rect key={i} x={f.x + dx} y={f.y} width={f.w} height={f.h} rx={f.rx} className={cls} />
+      );
+    });
+  return (
+    <svg viewBox="18 0 178 174" style={{ height: hauteur, flexShrink: 0 }} aria-hidden="true">
+      {rendre(FORMES_FACE, 0)}
+      {rendre(FORMES_DOS, 105)}
+      <text x="54" y="171" textAnchor="middle" className="schema-texte">face</text>
+      <text x="159" y="171" textAnchor="middle" className="schema-texte">dos</text>
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Programmes                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -852,7 +990,7 @@ const SEANCES_BASE = PROGRAMMES_BASE.flatMap((p) => p.seances);
 
 /* Transforme un programme perso stocké ({id, nom, seances:[{nom, exoIds}]})
    en programme complet affichable */
-function construirePerso(p) {
+function construirePerso(p, dico) {
   return {
     id: p.id,
     nom: p.nom,
@@ -863,8 +1001,8 @@ function construirePerso(p) {
       badge: String(i + 1),
       titre: s.nom,
       sousTitre: "sur mesure",
-      resume: s.exoIds.slice(0, 3).map((eid) => (EXOS[eid] ? EXOS[eid].nom.split(",")[0] : "")).join(" · "),
-      exos: s.exoIds.map((eid) => EXOS[eid]).filter(Boolean),
+      resume: s.exoIds.slice(0, 3).map((eid) => (dico[eid] ? dico[eid].nom.split(",")[0] : "")).filter(Boolean).join(" · "),
+      exos: s.exoIds.map((eid) => dico[eid]).filter(Boolean),
       cardio: CARDIO_GENERIQUE,
     })),
   };
@@ -980,6 +1118,7 @@ const CONSEILS = [
 
 async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
+  const exosPerso = (await lire("app:exosPerso")) || [];
   const ids = idsSeancesDe(persos);
   const res = {};
   for (const p of ["esteban", "valerie"]) {
@@ -1003,7 +1142,7 @@ async function chargerTout() {
       mesures: { ...MESURES_DEFAUT[p], ...(mesures || {}) },
     };
   }
-  return { persos, res };
+  return { persos, exosPerso, res };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1187,6 +1326,7 @@ export default function App() {
   const [chargement, setChargement] = useState(true);
   const [store, setStore] = useState({ esteban: etatVide(), valerie: etatVide() });
   const [programmesPerso, setProgrammesPerso] = useState([]);
+  const [exosPerso, setExosPerso] = useState([]);
   const [syncEtat, setSyncEtat] = useState("off"); // "ok" | "off"
   const [onglet, setOnglet] = useState("semaine");
   const [ouverte, setOuverte] = useState(null); // id de séance ou null
@@ -1197,11 +1337,12 @@ export default function App() {
   const vivantRef = useRef(true);
 
   async function afficherDonnees() {
-    const { persos, res } = await chargerTout();
+    const { persos, exosPerso: ep, res } = await chargerTout();
     let pSauve = await lire("app:profil");
     if (pSauve === "maman") pSauve = "valerie";
     if (!vivantRef.current) return;
     setProgrammesPerso(persos);
+    setExosPerso(ep);
     setStore(res);
     if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
     setChargement(false);
@@ -1258,8 +1399,9 @@ export default function App() {
       try {
         const statut = await tirerDepuisServeur();
         if (statut === "maj") {
-          const { persos, res } = await chargerTout();
+          const { persos, exosPerso: ep, res } = await chargerTout();
           setProgrammesPerso(persos);
+          setExosPerso(ep);
           setStore(res);
         } else if (statut === "code") {
           /* le code a été changé côté serveur : on reverrouille */
@@ -1296,12 +1438,35 @@ export default function App() {
     window.scrollTo({ top: 0 });
   }, [ouverte, onglet, edition]);
 
-  /* ---- programmes ---- */
+  /* ---- exercices & programmes ---- */
+  const dicoExos = useMemo(() => {
+    const d = { ...EXOS };
+    for (const e of exosPerso) d[e.id] = e;
+    return d;
+  }, [exosPerso]);
   const programmes = useMemo(
-    () => [...PROGRAMMES_BASE, ...programmesPerso.map(construirePerso)],
-    [programmesPerso]
+    () => [...PROGRAMMES_BASE, ...programmesPerso.map((p) => construirePerso(p, dicoExos))],
+    [programmesPerso, dicoExos]
   );
   const toutesSeances = useMemo(() => programmes.flatMap((p) => p.seances), [programmes]);
+
+  function sauverExoPerso(exo) {
+    setExosPerso((prev) => {
+      const liste = prev.some((e) => e.id === exo.id)
+        ? prev.map((e) => (e.id === exo.id ? exo : e))
+        : [...prev, exo];
+      ecrire("app:exosPerso", liste);
+      return liste;
+    });
+  }
+
+  function supprimerExoPerso(id) {
+    setExosPerso((prev) => {
+      const liste = prev.filter((e) => e.id !== id);
+      ecrire("app:exosPerso", liste);
+      return liste;
+    });
+  }
 
   /* ---- mutations ---- */
   const donnees = store[profil];
@@ -1510,6 +1675,10 @@ export default function App() {
         {edition ? (
           <VueEditeur
             initial={edition.id ? programmesPerso.find((p) => p.id === edition.id) : null}
+            dico={dicoExos}
+            exosPerso={exosPerso}
+            surSauverExo={sauverExoPerso}
+            surSupprimerExo={supprimerExoPerso}
             surSauver={(brouillon) => sauverProgramme(brouillon, edition.id || null)}
             surSupprimer={edition.id ? () => supprimerProgramme(edition.id) : null}
             surFermer={() => setEdition(null)}
@@ -2017,7 +2186,7 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
 /* Éditeur de programme personnalisé                                   */
 /* ------------------------------------------------------------------ */
 
-function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
+function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, surSauver, surSupprimer, surFermer }) {
   const [nom, setNom] = useState(initial ? initial.nom : "");
   const [seances, setSeances] = useState(
     initial ? initial.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] })) : null
@@ -2174,7 +2343,7 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
             ) : (
               <ol className="space-y-1.5 mb-1">
                 {s.exoIds.map((exoId, idx) => {
-                  const exo = EXOS[exoId];
+                  const exo = dico[exoId];
                   if (!exo) return null;
                   return (
                     <li key={exoId} className="rounded-xl bg-carte2 p-2 pl-3 flex items-center gap-2">
@@ -2256,6 +2425,10 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
         <SelecteurExos
           nomSeance={seances[selecteur].nom || `Séance ${selecteur + 1}`}
           exoIds={seances[selecteur].exoIds}
+          dico={dico}
+          exosPerso={exosPerso}
+          surSauverExo={surSauverExo}
+          surSupprimerExo={surSupprimerExo}
           surBasculer={(exoId) => basculerExo(selecteur, exoId)}
           surFermer={() => setSelecteur(null)}
         />
@@ -2265,9 +2438,10 @@ function VueEditeur({ initial, surSauver, surSupprimer, surFermer }) {
 }
 
 /* Sélecteur d'exercices plein écran : recherche + filtres par zone */
-function SelecteurExos({ nomSeance, exoIds, surBasculer, surFermer }) {
+function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSupprimerExo, surBasculer, surFermer }) {
   const [recherche, setRecherche] = useState("");
   const [zone, setZone] = useState(null); // null = toutes
+  const [form, setForm] = useState(undefined); // undefined ferm\u00e9 \u00b7 null nouveau \u00b7 objet = \u00e9dition
 
   const normalise = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const rq = normalise(recherche.trim());
@@ -2276,7 +2450,8 @@ function SelecteurExos({ nomSeance, exoIds, surBasculer, surFermer }) {
     .filter(([z]) => !zone || z === zone)
     .map(([z, ids]) => ({
       zone: z,
-      exos: ids.map((id) => EXOS[id]).filter((e) => !rq || normalise(e.nom).includes(rq)),
+      exos: [...ids.map((id) => dico[id]), ...exosPerso.filter((e) => e.zone === z)]
+        .filter((e) => e && (!rq || normalise(e.nom).includes(rq))),
     }))
     .filter((s) => s.exos.length > 0);
 
@@ -2331,8 +2506,16 @@ function SelecteurExos({ nomSeance, exoIds, surBasculer, surFermer }) {
         </div>
 
         <div className="flex-1 overflow-y-auto pb-8 space-y-4">
+          <button
+            onClick={() => setForm(null)}
+            className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+          >
+            <Plus size={17} className="text-accent transi" /> Créer mon exercice
+          </button>
           {sections.length === 0 && (
-            <p className="text-brume text-sm text-center pt-8">Aucun exercice ne correspond à « {recherche} ».</p>
+            <p className="text-brume text-sm text-center pt-8">
+              Aucun exercice ne correspond à « {recherche} » — tu peux le créer avec le bouton ci-dessus.
+            </p>
           )}
           {sections.map((sec) => (
             <div key={sec.zone}>
@@ -2341,35 +2524,304 @@ function SelecteurExos({ nomSeance, exoIds, surBasculer, surFermer }) {
                 {sec.exos.map((exo) => {
                   const choisi = exoIds.includes(exo.id);
                   return (
-                    <button
+                    <div
                       key={exo.id}
-                      onClick={() => surBasculer(exo.id)}
-                      aria-pressed={choisi}
-                      className={`w-full rounded-2xl border p-3 flex items-center gap-3 text-left transi ${
-                        choisi ? "bg-carte bordure-accent-douce" : "bg-carte border-ligne active:scale-98"
+                      className={`rounded-2xl border flex items-stretch transi ${
+                        choisi ? "bg-carte bordure-accent-douce" : "bg-carte border-ligne"
                       }`}
                     >
-                      <span className="flex-1 min-w-0">
-                        <span className="font-bold text-sm block leading-snug">{exo.nom}</span>
-                        <span className="text-brume text-xs block mt-0.5 chiffres">
-                          {exo.series} × {exo.reps} · repos {exo.repos} s
-                        </span>
-                      </span>
-                      <span
-                        className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transi ${
-                          choisi ? "bg-accent" : "bg-carte2"
-                        }`}
+                      <button
+                        onClick={() => surBasculer(exo.id)}
+                        aria-pressed={choisi}
+                        className="flex-1 min-w-0 p-3 flex items-center gap-3 text-left active:scale-98 transi"
                       >
-                        {choisi
-                          ? <Check size={18} strokeWidth={3.5} className="text-accent-ink pop" />
-                          : <Plus size={18} className="text-brume" />}
-                      </span>
-                    </button>
+                        <SchemaMuscles muscles={exo.muscles || []} hauteur={48} />
+                        <span className="flex-1 min-w-0">
+                          <span className="font-bold text-sm block leading-snug">
+                            {exo.nom}
+                            {exo.perso && (
+                              <span className="ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded bg-carte2 text-brume align-middle">
+                                perso
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-brume text-xs block mt-0.5 chiffres">
+                            {exo.series} × {exo.reps} · repos {exo.repos} s
+                          </span>
+                        </span>
+                        <span
+                          className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transi ${
+                            choisi ? "bg-accent" : "bg-carte2"
+                          }`}
+                        >
+                          {choisi
+                            ? <Check size={18} strokeWidth={3.5} className="text-accent-ink pop" />
+                            : <Plus size={18} className="text-brume" />}
+                        </span>
+                      </button>
+                      {exo.perso && (
+                        <button
+                          onClick={() => setForm(exo)}
+                          aria-label={`Modifier ${exo.nom}`}
+                          className="px-3 flex items-center justify-center shrink-0 active:scale-95 transi"
+                        >
+                          <Pencil size={15} className="text-brume" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {form !== undefined && (
+        <FormExo
+          initial={form}
+          surSauver={(exo) => {
+            surSauverExo(exo);
+            if (!form && !exoIds.includes(exo.id)) surBasculer(exo.id);
+            setForm(undefined);
+          }}
+          surSupprimer={
+            form
+              ? () => {
+                  if (exoIds.includes(form.id)) surBasculer(form.id);
+                  surSupprimerExo(form.id);
+                  setForm(undefined);
+                }
+              : null
+          }
+          surFermer={() => setForm(undefined)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Formulaire de création / édition d'un exercice personnalisé */
+function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
+  const [nom, setNom] = useState(initial ? initial.nom : "");
+  const [zone, setZone] = useState(initial ? initial.zone : "Jambes & fessiers");
+  const [muscles, setMuscles] = useState(initial ? initial.muscles || [] : MUSCLES_PAR_ZONE["Jambes & fessiers"]);
+  const [series, setSeries] = useState(initial ? String(initial.series) : "3");
+  const [reps, setReps] = useState(initial ? String(initial.reps) : "12");
+  const [repos, setRepos] = useState(initial ? String(initial.repos) : "60");
+  const [sansCharge, setSansCharge] = useState(initial ? !!initial.sansCharge : false);
+  const [consigne, setConsigne] = useState(initial && initial.charge ? initial.charge.esteban : "");
+  const [conseil, setConseil] = useState(initial ? initial.conseil || "" : "");
+
+  const valide = nom.trim().length > 0 && muscles.length > 0;
+
+  function choisirZone(z) {
+    setZone(z);
+    setMuscles(MUSCLES_PAR_ZONE[z] || []);
+  }
+
+  function basculerMuscle(m) {
+    setMuscles((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  }
+
+  function enregistrer() {
+    const texteConsigne = consigne.trim() || "À ton rythme — la technique d’abord";
+    surSauver({
+      id: initial ? initial.id : `exo-${Date.now()}`,
+      perso: true,
+      nom: nom.trim(),
+      zone,
+      muscles,
+      series: Math.max(1, parseInt(series, 10) || 3),
+      reps: reps.trim() || "12",
+      repos: parseInt(repos, 10) || 60,
+      sansCharge,
+      charge: { esteban: texteConsigne, valerie: texteConsigne },
+      variante: "",
+      conseil: conseil.trim(),
+    });
+  }
+
+  const etiquette = "text-xs uppercase tracking-widest text-brume font-bold block mb-2";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-fond overflow-y-auto">
+      <div className="mx-auto w-full max-w-md px-4 pb-10">
+        <div className="flex items-center gap-3 pt-5 pb-4">
+          <button
+            onClick={surFermer}
+            aria-label="Annuler"
+            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-extrabold tracking-tight leading-tight">
+              {initial ? "Modifier l’exercice" : "Mon exercice"}
+            </h2>
+            <p className="text-brume text-xs mt-0.5">Il apparaîtra dans le catalogue, pour vous deux</p>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <label className="block">
+            <span className={etiquette}>Nom de l’exercice</span>
+            <input
+              type="text"
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              placeholder="Ex. : Presse à mollets assis"
+              className="w-full rounded-2xl bg-carte border border-ligne px-4 font-bold text-base outline-none placeholder-slate-600 focus:border-slate-500"
+              style={{ height: 52 }}
+            />
+          </label>
+
+          <div>
+            <span className={etiquette}>Zone</span>
+            <div className="flex flex-wrap gap-1.5">
+              {ZONES.map(([z]) => (
+                <button
+                  key={z}
+                  onClick={() => choisirZone(z)}
+                  className={`px-3 rounded-xl text-xs font-bold transi ${
+                    zone === z ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                  }`}
+                  style={{ height: 40 }}
+                >
+                  {z}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className={etiquette}>Muscles travaillés</span>
+            <div className="flex items-start gap-3">
+              <SchemaMuscles muscles={muscles} hauteur={110} />
+              <div className="flex-1 flex flex-wrap gap-1.5">
+                {Object.entries(MUSCLES_LIBELLES).map(([m, libelle]) => (
+                  <button
+                    key={m}
+                    onClick={() => basculerMuscle(m)}
+                    aria-pressed={muscles.includes(m)}
+                    className={`px-2.5 rounded-lg text-xs font-bold transi ${
+                      muscles.includes(m) ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
+                    }`}
+                    style={{ height: 34 }}
+                  >
+                    {libelle}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className={etiquette}>Séries</span>
+              <div className="flex gap-1.5">
+                {["2", "3", "4"].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSeries(s)}
+                    className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
+                      series === s ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                    }`}
+                    style={{ height: 44 }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="block">
+              <span className={etiquette}>Répétitions</span>
+              <input
+                type="text"
+                value={reps}
+                onChange={(e) => setReps(e.target.value)}
+                placeholder="12, 10 / côté, 30 s…"
+                className="w-full rounded-xl bg-carte border border-ligne px-3 text-center font-bold text-sm outline-none placeholder-slate-600 chiffres"
+                style={{ height: 44 }}
+              />
+            </label>
+          </div>
+
+          <div>
+            <span className={etiquette}>Repos entre les séries</span>
+            <div className="flex gap-1.5">
+              {["45", "60", "90"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRepos(r)}
+                  className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
+                    repos === r ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                  }`}
+                  style={{ height: 44 }}
+                >
+                  {r} s
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => setSansCharge(!sansCharge)}
+            aria-pressed={sansCharge}
+            className={`w-full rounded-2xl border p-3.5 flex items-center gap-3 text-left transi ${
+              sansCharge ? "bordure-accent-douce bg-carte" : "border-ligne bg-carte"
+            }`}
+          >
+            <span
+              className={`h-6 w-6 rounded-md flex items-center justify-center shrink-0 transi ${
+                sansCharge ? "bg-accent" : "bg-carte2"
+              }`}
+            >
+              {sansCharge && <Check size={15} strokeWidth={3.5} className="text-accent-ink pop" />}
+            </span>
+            <span className="text-sm font-bold flex-1">Au poids du corps (pas de charge à noter)</span>
+          </button>
+
+          <label className="block">
+            <span className={etiquette}>Consigne de départ (optionnel)</span>
+            <input
+              type="text"
+              value={consigne}
+              onChange={(e) => setConsigne(e.target.value)}
+              placeholder="Ex. : Départ conseillé : 20–30 kg"
+              className="w-full rounded-2xl bg-carte border border-ligne px-4 text-sm font-bold outline-none placeholder-slate-600"
+              style={{ height: 48 }}
+            />
+          </label>
+
+          <label className="block">
+            <span className={etiquette}>Conseil technique (optionnel)</span>
+            <textarea
+              value={conseil}
+              onChange={(e) => setConseil(e.target.value)}
+              placeholder="Ex. : Dos plat, mouvement lent et contrôlé…"
+              rows={2}
+              className="w-full rounded-2xl bg-carte border border-ligne px-4 py-3 text-sm outline-none placeholder-slate-600 resize-none leading-relaxed"
+            />
+          </label>
+
+          <button
+            onClick={enregistrer}
+            disabled={!valide}
+            className={`w-full rounded-2xl font-extrabold text-base transi ${
+              valide ? "bg-accent text-accent-ink active:scale-98" : "bg-carte text-brume"
+            }`}
+            style={{ height: 56 }}
+          >
+            {valide ? "Enregistrer l’exercice" : "Donne un nom et au moins un muscle"}
+          </button>
+
+          {surSupprimer && (
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-brume text-xs">Supprimer cet exercice :</span>
+              <BoutonSuppression etiquette="Supprimer l’exercice" surConfirmer={surSupprimer} />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2549,8 +3001,20 @@ function CarteExo({ numero, total, exo, profil, coche, poids, surCoche, surPoids
       </div>
 
       <div className={coche ? "opacity-50" : ""}>
-        <p className="text-xs text-brume mt-3 leading-relaxed">{exo.conseil}</p>
-        <p className="text-xs text-brume mt-1.5 leading-relaxed italic">Variante : {exo.variante}</p>
+        {exo.conseil ? <p className="text-xs text-brume mt-3 leading-relaxed">{exo.conseil}</p> : null}
+        {exo.variante ? (
+          <p className="text-xs text-brume mt-1.5 leading-relaxed italic">Variante : {exo.variante}</p>
+        ) : null}
+
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-fond p-2.5">
+          <SchemaMuscles muscles={exo.muscles || []} hauteur={80} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-brume uppercase tracking-wide">Muscles travaillés</p>
+            <p className="text-xs text-douce mt-1.5 leading-relaxed">
+              {(exo.muscles || []).map((m) => MUSCLES_LIBELLES[m]).filter(Boolean).join(" · ") || "—"}
+            </p>
+          </div>
+        </div>
 
         <div className="mt-3 flex items-center gap-2">
           {!exo.sansCharge && (
