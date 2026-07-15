@@ -27,6 +27,53 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* clip plutôt que hidden : bloque le débordement horizontal sans casser
+   la molette desktop ni le scroll en PWA standalone */
+html, body {
+  overflow-x: clip;
+}
+@media (pointer: coarse) {
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* barre flottante du minuteur : au-dessus du home indicator iPhone */
+.barre-flottante {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+.coussin-bas {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* roue de sélection (façon iOS) : défilement aimanté, scrollbar masquée */
+.roue {
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 32%, black 68%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 32%, black 68%, transparent);
+}
+.roue::-webkit-scrollbar {
+  display: none;
+}
+.roue-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: #66748a;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.roue-active {
+  color: #e9eef4;
+  font-weight: 800;
+}
+
 .bg-accent { background-color: var(--accent); }
 .text-accent { color: var(--accent); }
 .text-accent-ink { color: var(--accent-ink); }

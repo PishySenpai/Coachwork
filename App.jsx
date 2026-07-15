@@ -176,6 +176,34 @@ async function tirerDepuisServeur() {
   return adopte ? "maj" : "ok";
 }
 
+/* ------------------------------------------------------------------ */
+/* Notifications (repos) — via le service worker quand il est là       */
+/* ------------------------------------------------------------------ */
+
+function heureCourte(ts) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
+
+async function notifier(titre, corps, options = {}) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const opts = { body: corps, tag: "coachwork-repos", icon: "/icone-192.png", badge: "/icone-192.png", ...options };
+    const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    if (reg && reg.showNotification) reg.showNotification(titre, opts);
+    else new Notification(titre, opts);
+  } catch (e) {}
+}
+
+async function fermerNotifications() {
+  try {
+    const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    if (reg && reg.getNotifications) {
+      (await reg.getNotifications({ tag: "coachwork-repos" })).forEach((n) => n.close());
+    }
+  } catch (e) {}
+}
+
 /* Migration : l'ancien profil « maman » devient « valerie » */
 const ANCIENS_PROFILS = { valerie: "maman" };
 
@@ -1116,6 +1144,14 @@ const CONSEILS = [
 /* Chargement de l'état complet depuis le stockage local               */
 /* ------------------------------------------------------------------ */
 
+/* Une séance en cours stocke les étapes cochées et les séries faites.
+   (migration : les anciennes données étaient directement la carte des coches) */
+function normaliserSeance(brut) {
+  if (!brut) return { coches: {}, series: {} };
+  if (brut.coches) return { coches: brut.coches, series: brut.series || {} };
+  return { coches: brut, series: {} };
+}
+
 async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
   const exosPerso = (await lire("app:exosPerso")) || [];
@@ -1125,7 +1161,7 @@ async function chargerTout() {
     const seances = {};
     await Promise.all(
       ids.map(async (id) => {
-        seances[id] = (await lireProfil(p, `seance:${id}`)) || {};
+        seances[id] = normaliserSeance(await lireProfil(p, `seance:${id}`));
       })
     );
     const [ch, ass, mode, mesures] = await Promise.all([
@@ -1331,7 +1367,8 @@ export default function App() {
   const [onglet, setOnglet] = useState("semaine");
   const [ouverte, setOuverte] = useState(null); // id de séance ou null
   const [edition, setEdition] = useState(null); // null | {id} | {nouveau:true}
-  const [minuteur, setMinuteur] = useState(null); // {total, restant, label}
+  const [minuteur, setMinuteur] = useState(null); // {finA, total, label}
+  const [, setTic] = useState(0); // re-rendu périodique pendant le repos
   const [fete, setFete] = useState(null); // {titre, deja, total}
   const [verrou, setVerrou] = useState(null); // null | {erreur?, occupe?}
   const vivantRef = useRef(true);
@@ -1417,22 +1454,57 @@ export default function App() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [syncEtat]);
 
-  /* ---- minuteur de repos ---- */
+  /* ---- enregistrement du service worker (notifications + hors-ligne) ---- */
   useEffect(() => {
-    if (!minuteur || minuteur.restant <= 0) return;
-    const t = setInterval(() => {
-      setMinuteur((cur) => (cur ? { ...cur, restant: Math.max(0, cur.restant - 1) } : cur));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [minuteur !== null && minuteur.restant > 0]);
+    try {
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    } catch (e) {}
+  }, []);
 
-  const finie = minuteur !== null && minuteur.restant === 0;
+  /* ---- minuteur de repos : basé sur l'horloge, il continue même
+     si l'app passe en arrière-plan ---- */
+  useEffect(() => {
+    if (!minuteur) return;
+    const tic = () => setTic((x) => x + 1);
+    const t = setInterval(tic, 500);
+    document.addEventListener("visibilitychange", tic);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", tic); };
+  }, [minuteur !== null]);
+
+  const resteRepos = minuteur ? Math.max(0, Math.ceil((minuteur.finA - Date.now()) / 1000)) : 0;
+  const finie = minuteur !== null && resteRepos === 0;
   useEffect(() => {
     if (!finie) return;
     try { if (navigator.vibrate) navigator.vibrate([150, 90, 150]); } catch (e) {}
+    notifier("Repos terminé — à toi !", minuteur.label, { renotify: true, vibrate: [150, 90, 150] });
     const t = setTimeout(() => setMinuteur(null), 4000);
     return () => clearTimeout(t);
   }, [finie]);
+
+  function lancerRepos(exo) {
+    try {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    } catch (e) {}
+    const finA = Date.now() + exo.repos * 1000;
+    setMinuteur({ finA, total: exo.repos, label: exo.nom });
+    notifier("Repos en cours", `${exo.nom} — fin à ${heureCourte(finA)}`, { silent: true });
+  }
+
+  function prolongerRepos() {
+    setMinuteur((c) => {
+      if (!c) return c;
+      const finA = Math.max(c.finA, Date.now()) + 30000;
+      notifier("Repos en cours", `${c.label} — fin à ${heureCourte(finA)}`, { silent: true });
+      return { ...c, finA, total: c.total + 30 };
+    });
+  }
+
+  function arreterRepos() {
+    setMinuteur(null);
+    fermerNotifications();
+  }
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -1480,9 +1552,25 @@ export default function App() {
   function basculerEtape(sid, eid) {
     setStore((prev) => {
       const p = prev[profil];
-      const checks = { ...(p.seances[sid] || {}), [eid]: !(p.seances[sid] || {})[eid] };
-      ecrire(`${profil}:seance:${sid}`, checks);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: checks } } };
+      const seance = normaliserSeance(p.seances[sid]);
+      const maj = { ...seance, coches: { ...seance.coches, [eid]: !seance.coches[eid] } };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
+  /* n séries faites sur un exercice ; l'exercice se coche tout seul
+     quand toutes les séries prévues sont faites */
+  function noterSeries(sid, exo, n) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const maj = {
+        coches: { ...seance.coches, [exo.id]: n >= exo.series },
+        series: { ...seance.series, [exo.id]: n },
+      };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
     });
   }
 
@@ -1526,11 +1614,12 @@ export default function App() {
     const historique = deja
       ? donnees.historique
       : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre }];
+    const vierge = { coches: {}, series: {} };
     setStore((prev) => {
       const p = prev[profil];
       ecrire(`${profil}:assiduite`, { historique });
-      ecrire(`${profil}:seance:${seance.id}`, {});
-      return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: {} } } };
+      ecrire(`${profil}:seance:${seance.id}`, vierge);
+      return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: vierge } } };
     });
     setOuverte(null);
     setFete({ titre: seance.titre, deja, total: historique.length });
@@ -1687,13 +1776,14 @@ export default function App() {
           <VueSeance
             seance={seanceOuverte}
             profil={profil}
-            checks={donnees.seances[seanceOuverte.id] || {}}
+            etat={normaliserSeance(donnees.seances[seanceOuverte.id])}
             charges={donnees.charges}
             faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
             surRetour={() => setOuverte(null)}
             surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
+            surSeries={(exo, n) => noterSeries(seanceOuverte.id, exo, n)}
             surCharge={noterCharge}
-            surRepos={(exo) => setMinuteur({ total: exo.repos, restant: exo.repos, label: exo.nom })}
+            surRepos={lancerRepos}
             surFin={() => terminerSeance(seanceOuverte)}
             surAnnuler={() => retirerValidation(seanceOuverte.id)}
           />
@@ -1757,26 +1847,26 @@ export default function App() {
 
       {/* ---------- minuteur de repos flottant ---------- */}
       {minuteur && (
-        <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md vue">
+        <div className="fixed left-4 right-4 z-40 mx-auto max-w-md vue barre-flottante">
           <div className="rounded-2xl bg-carte border bordure-accent-douce p-4 shadow-lg">
-            {minuteur.restant > 0 ? (
+            {resteRepos > 0 ? (
               <>
                 <div className="flex items-center gap-3">
                   <Timer size={20} className="text-accent shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-brume truncate">Repos — {minuteur.label}</p>
                     <p className="text-2xl font-extrabold chiffres leading-tight">
-                      {Math.floor(minuteur.restant / 60)}:{String(minuteur.restant % 60).padStart(2, "0")}
+                      {Math.floor(resteRepos / 60)}:{String(resteRepos % 60).padStart(2, "0")}
                     </p>
                   </div>
                   <button
-                    onClick={() => setMinuteur((c) => c && { ...c, restant: c.restant + 30, total: c.total + 30 })}
+                    onClick={prolongerRepos}
                     className="h-11 px-3 rounded-xl bg-carte2 text-sm font-bold flex items-center gap-1 active:scale-95 transi"
                   >
                     <Plus size={16} /> 30 s
                   </button>
                   <button
-                    onClick={() => setMinuteur(null)}
+                    onClick={arreterRepos}
                     aria-label="Arrêter le repos"
                     className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
                   >
@@ -1786,7 +1876,7 @@ export default function App() {
                 <div className="mt-3 h-1.5 rounded-full bg-carte2 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-accent barre"
-                    style={{ width: `${(minuteur.restant / minuteur.total) * 100}%` }}
+                    style={{ width: `${(resteRepos / minuteur.total) * 100}%` }}
                   />
                 </div>
               </>
@@ -1795,7 +1885,7 @@ export default function App() {
                 <Sparkles size={20} className="text-accent" />
                 <p className="font-bold flex-1">Repos terminé — à toi !</p>
                 <button
-                  onClick={() => setMinuteur(null)}
+                  onClick={arreterRepos}
                   aria-label="Fermer"
                   className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center"
                 >
@@ -1958,7 +2048,8 @@ function VueSemaine({
         <div className="space-y-3">
           {progActuel.seances.map((s) => {
             const faite = stats.cetteSemaine.has(s.id);
-            const nChecks = Object.values(donnees.seances[s.id] || {}).filter(Boolean).length;
+            const etatSeance = donnees.seances[s.id] || {};
+            const nChecks = Object.values(etatSeance.coches || etatSeance).filter((v) => v === true).length;
             const enCours = !faite && nChecks > 0;
             return (
               <button
@@ -2833,9 +2924,11 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* ------------------------------------------------------------------ */
 
 function VueSeance({
-  seance, profil, checks, charges, faiteCetteSemaine,
-  surRetour, surCoche, surCharge, surRepos, surFin, surAnnuler,
+  seance, profil, etat, charges, faiteCetteSemaine,
+  surRetour, surCoche, surSeries, surCharge, surRepos, surFin, surAnnuler,
 }) {
+  const checks = etat.coches;
+  const [roue, setRoue] = useState(null); // exo dont on règle la charge
   const etapes = [
     { id: "echauffement" },
     ...seance.exos.map((e) => ({ id: e.id })),
@@ -2918,9 +3011,11 @@ function VueSeance({
             exo={exo}
             profil={profil}
             coche={!!checks[exo.id]}
+            seriesFaites={etat.series[exo.id] || 0}
             poids={charges[exo.id] || ""}
             surCoche={() => surCoche(exo.id)}
-            surPoids={(v) => surCharge(exo.id, v)}
+            surSeries={(n) => surSeries(exo, n)}
+            surRoue={() => setRoue(exo)}
             surRepos={() => surRepos(exo)}
           />
         ))}
@@ -2960,6 +3055,124 @@ function VueSeance({
       <p className="text-brume text-center text-xs mt-3 leading-relaxed">
         Douleur articulaire vive ? On passe l’exercice, sans culpabiliser — voir Conseils.
       </p>
+
+      {roue && (
+        <FeuilleCharge
+          exo={roue}
+          valeurInitiale={charges[roue.id] || ""}
+          surValider={(v) => { surCharge(roue.id, v); setRoue(null); }}
+          surFermer={() => setRoue(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Roue de sélection de charge (façon iOS)                             */
+/* ------------------------------------------------------------------ */
+
+const ROUE_ENTIERS = Array.from({ length: 301 }, (_, i) => String(i));
+const ROUE_DECIMALES = [",0", ",5"];
+const ROUE_H = 40;
+
+function Roue({ valeurs, index, surIndex, largeur = 80 }) {
+  const ref = useRef(null);
+  const minuterie = useRef(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = index * ROUE_H;
+    // positionnement initial uniquement
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function surScroll() {
+    clearTimeout(minuterie.current);
+    minuterie.current = setTimeout(() => {
+      const el = ref.current;
+      if (!el) return;
+      const i = Math.max(0, Math.min(valeurs.length - 1, Math.round(el.scrollTop / ROUE_H)));
+      if (i !== index) {
+        surIndex(i);
+        try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+      }
+    }, 120);
+  }
+
+  return (
+    <div ref={ref} onScroll={surScroll} className="roue" style={{ width: largeur, height: 200 }}>
+      <div style={{ height: (200 - ROUE_H) / 2 }} />
+      {valeurs.map((v, i) => (
+        <div
+          key={i}
+          onClick={() => { surIndex(i); if (ref.current) ref.current.scrollTo({ top: i * ROUE_H, behavior: "smooth" }); }}
+          className={`roue-item chiffres ${i === index ? "roue-active" : ""}`}
+          style={{ height: ROUE_H }}
+        >
+          {v}
+        </div>
+      ))}
+      <div style={{ height: (200 - ROUE_H) / 2 }} />
+    </div>
+  );
+}
+
+function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
+  const nombre = parseFloat(String(valeurInitiale).replace(",", "."));
+  const initEntier = Number.isFinite(nombre) ? Math.max(0, Math.min(300, Math.floor(nombre))) : 20;
+  const initDec = Number.isFinite(nombre) && Math.round((nombre % 1) * 10) >= 3 ? 1 : 0;
+  const [entier, setEntier] = useState(initEntier);
+  const [dec, setDec] = useState(initDec);
+
+  const valeur = dec === 1 ? `${entier},5` : String(entier);
+
+  return (
+    <div className="fixed inset-0 z-50 voile" onClick={surFermer}>
+      <div
+        className="absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h3>
+            <p className="text-brume text-xs mt-0.5">Charge utilisée</p>
+          </div>
+          <button
+            onClick={surFermer}
+            aria-label="Fermer"
+            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
+          >
+            <X size={18} className="text-brume" />
+          </button>
+        </div>
+
+        <div className="relative flex items-center justify-center gap-1">
+          <div
+            className="absolute pointer-events-none rounded-xl bg-carte2"
+            style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 24, right: 24, opacity: 0.45 }}
+          />
+          <Roue valeurs={ROUE_ENTIERS} index={entier} surIndex={setEntier} largeur={96} />
+          <Roue valeurs={ROUE_DECIMALES} index={dec} surIndex={setDec} largeur={64} />
+          <div style={{ height: 200 }} className="flex items-center">
+            <span className="font-bold text-brume text-sm pl-1">kg</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            onClick={() => surValider("")}
+            className="h-14 px-4 rounded-2xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
+          >
+            Effacer
+          </button>
+          <button
+            onClick={() => surValider(valeur)}
+            className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
+          >
+            Valider {valeur} kg
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2979,7 +3192,8 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
   );
 }
 
-function CarteExo({ numero, total, exo, profil, coche, poids, surCoche, surPoids, surRepos }) {
+function CarteExo({ numero, total, exo, profil, coche, seriesFaites, poids, surCoche, surSeries, surRoue, surRepos }) {
+  const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   return (
     <div className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}>
       <div className="flex items-start gap-3">
@@ -3000,6 +3214,33 @@ function CarteExo({ numero, total, exo, profil, coche, poids, surCoche, surPoids
         <CaseCoche coche={coche} surClic={surCoche} />
       </div>
 
+      {/* séries faites : une pastille par série, tape après chaque série */}
+      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs text-brume font-bold mr-1">Séries</span>
+        {Array.from({ length: nbPastilles }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
+            aria-label={`Série ${i + 1} ${i < seriesFaites ? "faite" : "à faire"}`}
+            className={`h-9 w-9 rounded-full text-xs font-extrabold chiffres transi ${
+              i < seriesFaites ? "bg-accent text-accent-ink" : "bg-carte2 text-brume active:scale-95"
+            }`}
+          >
+            {i < seriesFaites ? <Check size={15} strokeWidth={3.5} className="mx-auto pop" /> : i + 1}
+          </button>
+        ))}
+        {seriesFaites >= exo.series && nbPastilles < 6 && (
+          <button
+            onClick={() => surSeries(seriesFaites + 1)}
+            aria-label="Ajouter une série bonus"
+            className="h-9 w-9 rounded-full bg-carte2 text-brume flex items-center justify-center active:scale-95 transi"
+          >
+            <Plus size={15} />
+          </button>
+        )}
+        <span className="text-xs text-brume chiffres ml-auto">{seriesFaites}/{exo.series}</span>
+      </div>
+
       <div className={coche ? "opacity-50" : ""}>
         {exo.conseil ? <p className="text-xs text-brume mt-3 leading-relaxed">{exo.conseil}</p> : null}
         {exo.variante ? (
@@ -3018,19 +3259,19 @@ function CarteExo({ numero, total, exo, profil, coche, poids, surCoche, surPoids
 
         <div className="mt-3 flex items-center gap-2">
           {!exo.sansCharge && (
-            <label className="flex-1 flex items-center gap-2 rounded-xl bg-carte2 px-3" style={{ height: 48 }}>
-              <span className="text-xs text-brume shrink-0">Charge utilisée</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={poids}
-                onChange={(e) => surPoids(e.target.value)}
-                placeholder="—"
-                className="w-full min-w-0 bg-transparent text-right font-extrabold chiffres text-base outline-none placeholder-slate-600"
-                aria-label={`Charge utilisée pour ${exo.nom}`}
-              />
+            <button
+              onClick={surRoue}
+              aria-label={`Charge utilisée pour ${exo.nom} : ${poids || "non renseignée"}`}
+              className="flex-1 flex items-center gap-2 rounded-xl bg-carte2 px-3 text-left active:scale-98 transi"
+              style={{ height: 48 }}
+            >
+              <span className="text-xs text-brume shrink-0">Charge</span>
+              <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-base truncate">
+                {poids || "—"}
+              </span>
               <span className="text-xs text-brume shrink-0">kg</span>
-            </label>
+              <ChevronDown size={14} className="text-brume shrink-0" />
+            </button>
           )}
           <button
             onClick={surRepos}
