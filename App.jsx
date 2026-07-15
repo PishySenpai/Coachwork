@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
@@ -1635,6 +1636,11 @@ export default function App() {
     ecrire("app:profil", p);
   }
 
+  /* les feuilles sont portalées sur <body> : il porte aussi l'accent du profil */
+  useEffect(() => {
+    document.body.dataset.profil = profil;
+  }, [profil]);
+
   function basculerEtape(sid, eid) {
     setStore((prev) => {
       const p = prev[profil];
@@ -2633,8 +2639,8 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
     }))
     .filter((s) => s.exos.length > 0);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-fond flex flex-col coussin-haut">
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-fond flex flex-col coussin-haut font-jakarta text-encre">
       <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col px-4">
         <div className="flex items-center gap-3 pt-5 pb-3">
           <div className="flex-1 min-w-0">
@@ -2775,7 +2781,8 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
           surFermer={() => setForm(undefined)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3215,8 +3222,8 @@ function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
 
   const valeur = dec === 1 ? `${entier},5` : String(entier);
 
-  return (
-    <div className="fixed inset-0 z-50 voile" onClick={surFermer}>
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre" onClick={surFermer}>
       <div
         className="absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
         onClick={(e) => e.stopPropagation()}
@@ -3262,7 +3269,8 @@ function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
