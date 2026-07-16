@@ -314,6 +314,7 @@ function semainesAvant(isoLundi, n) {
 
 const FORMAT_JOUR = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const FORMAT_COURT = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
+const FORMAT_MINI = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
 
 /* ------------------------------------------------------------------ */
 /* Profils & mesures                                                   */
@@ -1775,10 +1776,24 @@ export default function App() {
 
   function terminerSeance(seance) {
     const auj = cleJour();
+    /* instantané de la séance : exercices réellement faits, séries et charges du jour */
+    const etatSeance = normaliserSeance(donnees.seances[seance.id]);
+    const detail = seance.exos
+      .filter((slot) => etatSeance.coches[slot.id])
+      .map((slot) => {
+        const exo = (etatSeance.remplacements[slot.id] && dicoExos[etatSeance.remplacements[slot.id]]) || slot;
+        return {
+          id: exo.id,
+          nom: exo.nom,
+          series: etatSeance.series[slot.id] || exo.series,
+          reps: exo.reps,
+          charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
+        };
+      });
     const deja = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
     const historique = deja
       ? donnees.historique
-      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre }];
+      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail }];
     const vierge = { coches: {}, series: {}, remplacements: {} };
     setStore((prev) => {
       const p = prev[profil];
@@ -1967,6 +1982,7 @@ export default function App() {
             surRemplacer={(slotId, nouvelId) => remplacerExo(seanceOuverte.id, slotId, nouvelId)}
             surCharge={noterCharge}
             surRepos={lancerRepos}
+            historique={donnees.historique}
             surFin={() => terminerSeance(seanceOuverte)}
             surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
             surAnnuler={() => retirerValidation(seanceOuverte.id)}
@@ -2383,6 +2399,7 @@ function VueSemaine({
 /* ------------------------------------------------------------------ */
 
 function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
+  const [deplie, setDeplie] = useState(null);
   const groupes = useMemo(() => {
     const parSemaine = new Map();
     for (const h of historique) {
@@ -2429,24 +2446,62 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
             <span className="text-accent transi"> · {entrees.length} séance{entrees.length > 1 ? "s" : ""}</span>
           </h3>
           <div className="space-y-2">
-            {entrees.map((h, i) => (
-              <div
-                key={`${h.s}-${h.d}-${i}`}
-                className="rounded-2xl bg-carte border border-ligne p-3 flex items-center gap-3"
-              >
-                <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-                  <Check size={19} strokeWidth={3} className="text-accent transi" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm truncate">{titreDe(h)}</p>
-                  <p className="text-brume text-xs mt-0.5">{FORMAT_JOUR.format(depuisCle(h.d))}</p>
+            {entrees.map((h, i) => {
+              const cle = `${semaine}-${h.s}-${h.d}-${i}`;
+              const ouvert = deplie === cle;
+              return (
+                <div key={cle} className="rounded-2xl bg-carte border border-ligne overflow-hidden">
+                  <div className="p-3 flex items-center gap-3">
+                    <button
+                      onClick={() => setDeplie(ouvert ? null : cle)}
+                      aria-expanded={ouvert}
+                      className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                    >
+                      <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+                        <Check size={19} strokeWidth={3} className="text-accent transi" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="font-bold text-sm block truncate">{titreDe(h)}</span>
+                        <span className="text-brume text-xs block mt-0.5">
+                          {FORMAT_JOUR.format(depuisCle(h.d))}
+                          {h.detail ? ` · ${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : ""}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        size={17}
+                        className={`text-brume shrink-0 transi ${ouvert ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                    <BoutonSuppression
+                      etiquette="Supprimer cette séance de l’historique"
+                      surConfirmer={() => surSupprimer(h)}
+                    />
+                  </div>
+                  {ouvert && (
+                    <div className="px-3 pb-3 vue">
+                      {h.detail && h.detail.length ? (
+                        <div className="rounded-xl bg-fond p-3 space-y-1.5">
+                          {h.detail.map((dexo, j) => (
+                            <div key={j} className="flex items-baseline justify-between gap-3">
+                              <span className="text-xs font-bold text-douce truncate">{dexo.nom}</span>
+                              <span className="text-xs text-brume chiffres shrink-0">
+                                {dexo.series} × {dexo.reps}
+                                {dexo.charge ? ` · ${dexo.charge} kg` : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-brume text-xs leading-relaxed">
+                          Détail non enregistré — les séances validées à partir de maintenant
+                          garderont leurs exercices, séries et charges.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <BoutonSuppression
-                  etiquette="Supprimer cette séance de l’historique"
-                  surConfirmer={() => surSupprimer(h)}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}
@@ -3143,11 +3198,23 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* ------------------------------------------------------------------ */
 
 function VueSeance({
-  seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine,
+  seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
   surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
   surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
+  /* dernière performance enregistrée par exercice (séance validée la plus récente) */
+  const dernieresPerfs = useMemo(() => {
+    const m = {};
+    for (let i = historique.length - 1; i >= 0; i--) {
+      const h = historique[i];
+      if (!h.detail) continue;
+      for (const dexo of h.detail) {
+        if (!m[dexo.id]) m[dexo.id] = { ...dexo, d: h.d };
+      }
+    }
+    return m;
+  }, [historique]);
   const [roue, setRoue] = useState(null); // exo dont on règle la charge
   const [confirmation, setConfirmation] = useState(false); // séance écourtée
   const etapes = [
@@ -3245,6 +3312,7 @@ function VueSeance({
               coche={!!checks[slot.id]}
               seriesFaites={etat.series[slot.id] || 0}
               poids={charges[exoAffiche.id] || ""}
+              dernierePerf={dernieresPerfs[exoAffiche.id]}
               surCoche={() => surCoche(slot.id)}
               surSeries={(n) => surSeries(slot.id, exoAffiche.series, n)}
               surRoue={() => setRoue(exoAffiche)}
@@ -3495,7 +3563,7 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 
 function CarteExo({
   numero, total, exo, nomOriginal, variantes = [], profil, coche, seriesFaites, poids,
-  surCoche, surSeries, surRoue, surRepos, surVariante,
+  dernierePerf, surCoche, surSeries, surRoue, surRepos, surVariante,
 }) {
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const aVariantes = variantes.length > 1;
@@ -3558,7 +3626,18 @@ function CarteExo({
             <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
             <span className="text-brume"> · repos {exo.repos} s</span>
           </p>
-          <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[profil]}</p>
+          {dernierePerf ? (
+            <p className="text-xs mt-1.5 leading-relaxed">
+              <span className="text-accent transi font-bold">Dernière fois :</span>{" "}
+              <span className="text-douce chiffres">
+                {dernierePerf.series} × {dernierePerf.reps}
+                {dernierePerf.charge ? ` · ${dernierePerf.charge} kg` : ""}
+              </span>
+              <span className="text-brume"> · {FORMAT_MINI.format(depuisCle(dernierePerf.d))}</span>
+            </p>
+          ) : (
+            <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[profil]}</p>
+          )}
         </div>
         <CaseCoche coche={coche} surClic={surCoche} />
       </div>
