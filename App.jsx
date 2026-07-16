@@ -4,7 +4,7 @@ import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
   Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
-  ChevronUp, Copy, SquarePen,
+  ChevronUp, Copy, SquarePen, ArrowLeftRight,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -879,6 +879,58 @@ for (const [id, m] of Object.entries(MUSCLES_PAR_EXO)) {
   if (EXOS[id]) EXOS[id].muscles = m;
 }
 
+/* ------------------------------------------------------------------ */
+/* Groupes de mouvement : les exercices d'un même groupe sont           */
+/* interchangeables en séance (swipe / bouton variante)                 */
+/* ------------------------------------------------------------------ */
+
+const GROUPES = {
+  squat: "Squat & presse",
+  ischios: "Ischios & charnière",
+  fessiers: "Fessiers",
+  quadriceps: "Quadriceps (isolation)",
+  hanches: "Hanches (machine)",
+  mollets: "Mollets",
+  "poussee-poitrine": "Poussée poitrine",
+  epaules: "Épaules",
+  "arriere-epaule": "Arrière d'épaule & posture",
+  trapezes: "Trapèzes",
+  "tirage-vertical": "Tirage vertical",
+  "tirage-horizontal": "Tirage horizontal",
+  biceps: "Biceps",
+  triceps: "Triceps",
+  "gainage-ventral": "Gainage ventral",
+  obliques: "Obliques",
+  "abdos-flexion": "Abdos (flexion)",
+  lombaires: "Bas du dos",
+};
+
+const GROUPE_PAR_EXO = {
+  presse: "squat", "squat-barre": "squat", goblet: "squat", fentes: "squat",
+  "souleve-roumain": "ischios", "leg-curl": "ischios",
+  "hip-thrust": "fessiers", "kickback-fessier": "fessiers",
+  "leg-extension": "quadriceps",
+  abduction: "hanches", adduction: "hanches",
+  mollets: "mollets",
+  "dev-poitrine": "poussee-poitrine", "dev-couche": "poussee-poitrine",
+  "dev-incline": "poussee-poitrine", pompes: "poussee-poitrine",
+  ecarte: "poussee-poitrine", dips: "poussee-poitrine",
+  "dev-epaules": "epaules", "elevations-laterales": "epaules",
+  oiseau: "arriere-epaule", "face-pull": "arriere-epaule",
+  shrugs: "trapezes",
+  "tirage-vertical": "tirage-vertical", "traction-assistee": "tirage-vertical",
+  rowing: "tirage-horizontal", "tirage-horizontal": "tirage-horizontal", "rowing-haltere": "tirage-horizontal",
+  "curl-biceps": "biceps", "curl-marteau": "biceps",
+  "triceps-poulie": "triceps",
+  planche: "gainage-ventral", "dead-bug": "gainage-ventral", "mountain-climbers": "gainage-ventral",
+  "planche-laterale": "obliques", "russian-twist": "obliques",
+  crunch: "abdos-flexion", "releve-genoux": "abdos-flexion",
+  "extension-lombaire": "lombaires", superman: "lombaires",
+};
+for (const [id, g] of Object.entries(GROUPE_PAR_EXO)) {
+  if (EXOS[id]) EXOS[id].groupe = g;
+}
+
 /* Silhouettes stylisées (face / dos) : chaque forme porte éventuellement
    un identifiant de muscle, colorié en accent quand il travaille */
 const FORMES_FACE = [
@@ -1217,9 +1269,9 @@ const CONSEILS = [
 /* Une séance en cours stocke les étapes cochées et les séries faites.
    (migration : les anciennes données étaient directement la carte des coches) */
 function normaliserSeance(brut) {
-  if (!brut) return { coches: {}, series: {} };
-  if (brut.coches) return { coches: brut.coches, series: brut.series || {} };
-  return { coches: brut, series: {} };
+  if (!brut) return { coches: {}, series: {}, remplacements: {} };
+  if (brut.coches) return { coches: brut.coches, series: brut.series || {}, remplacements: brut.remplacements || {} };
+  return { coches: brut, series: {}, remplacements: {} };
 }
 
 async function chargerTout() {
@@ -1608,6 +1660,11 @@ export default function App() {
     [programmesPerso, dicoExos]
   );
   const toutesSeances = useMemo(() => programmes.flatMap((p) => p.seances), [programmes]);
+  /* catalogue ordonné complet (variantes swipe) */
+  const tousExos = useMemo(
+    () => [...ZONES.flatMap(([, ids]) => ids).map((id) => EXOS[id]), ...exosPerso],
+    [exosPerso]
+  );
 
   function sauverExoPerso(exo) {
     setExosPerso((prev) => {
@@ -1651,16 +1708,32 @@ export default function App() {
     });
   }
 
-  /* n séries faites sur un exercice ; l'exercice se coche tout seul
+  /* n séries faites sur un emplacement d'exercice ; il se coche tout seul
      quand toutes les séries prévues sont faites */
-  function noterSeries(sid, exo, n) {
+  function noterSeries(sid, slotId, cible, n) {
     setStore((prev) => {
       const p = prev[profil];
       const seance = normaliserSeance(p.seances[sid]);
       const maj = {
-        coches: { ...seance.coches, [exo.id]: n >= exo.series },
-        series: { ...seance.series, [exo.id]: n },
+        ...seance,
+        coches: { ...seance.coches, [slotId]: n >= cible },
+        series: { ...seance.series, [slotId]: n },
       };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
+  /* remplace l'exercice d'un emplacement par une variante (humeur du jour,
+     machine prise…) ; revient au programme d'origine à la validation */
+  function remplacerExo(sid, slotId, nouvelId) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const remplacements = { ...seance.remplacements };
+      if (nouvelId === slotId) delete remplacements[slotId];
+      else remplacements[slotId] = nouvelId;
+      const maj = { ...seance, remplacements };
       ecrire(`${profil}:seance:${sid}`, maj);
       return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
     });
@@ -1706,7 +1779,7 @@ export default function App() {
     const historique = deja
       ? donnees.historique
       : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre }];
-    const vierge = { coches: {}, series: {} };
+    const vierge = { coches: {}, series: {}, remplacements: {} };
     setStore((prev) => {
       const p = prev[profil];
       ecrire(`${profil}:assiduite`, { historique });
@@ -1715,6 +1788,21 @@ export default function App() {
     });
     setOuverte(null);
     setFete({ titre: seance.titre, deja, total: historique.length });
+  }
+
+  /* Valide une séance écourtée en gardant la version faite comme programme */
+  function terminerAvecSauvegarde(seance, exoIdsFaits) {
+    if (exoIdsFaits.length) {
+      const prog = {
+        id: `perso-${Date.now()}`,
+        nom: `${seance.titre} · express`,
+        seances: [{ nom: `${seance.titre} · express`, exoIds: exoIdsFaits }],
+      };
+      const liste = [...programmesPerso, prog];
+      setProgrammesPerso(liste);
+      ecrire("app:programmesPerso", liste);
+    }
+    terminerSeance(seance);
   }
 
   /* Annule la validation de cette semaine (cochée par erreur) */
@@ -1870,13 +1958,17 @@ export default function App() {
             profil={profil}
             etat={normaliserSeance(donnees.seances[seanceOuverte.id])}
             charges={donnees.charges}
+            dico={dicoExos}
+            tousExos={tousExos}
             faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
             surRetour={() => setOuverte(null)}
             surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
-            surSeries={(exo, n) => noterSeries(seanceOuverte.id, exo, n)}
+            surSeries={(slotId, cible, n) => noterSeries(seanceOuverte.id, slotId, cible, n)}
+            surRemplacer={(slotId, nouvelId) => remplacerExo(seanceOuverte.id, slotId, nouvelId)}
             surCharge={noterCharge}
             surRepos={lancerRepos}
             surFin={() => terminerSeance(seanceOuverte)}
+            surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
             surAnnuler={() => retirerValidation(seanceOuverte.id)}
           />
         ) : (
@@ -2798,6 +2890,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
   const [sansCharge, setSansCharge] = useState(initial ? !!initial.sansCharge : false);
   const [consigne, setConsigne] = useState(initial && initial.charge ? initial.charge.esteban : "");
   const [conseil, setConseil] = useState(initial ? initial.conseil || "" : "");
+  const [groupe, setGroupe] = useState(initial ? initial.groupe || null : null);
 
   const valide = nom.trim().length > 0 && muscles.length > 0;
 
@@ -2822,6 +2915,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
       reps: reps.trim() || "12",
       repos: parseInt(repos, 10) || 60,
       sansCharge,
+      groupe: groupe || undefined,
       charge: { esteban: texteConsigne, valerie: texteConsigne },
       variante: "",
       conseil: conseil.trim(),
@@ -2900,6 +2994,36 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div>
+            <span className={etiquette}>Interchangeable avec (swipe en séance)</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setGroupe(null)}
+                className={`px-2.5 rounded-lg text-xs font-bold transi ${
+                  groupe === null ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
+                }`}
+                style={{ height: 34 }}
+              >
+                Aucun
+              </button>
+              {Object.entries(GROUPES).map(([id, libelle]) => (
+                <button
+                  key={id}
+                  onClick={() => setGroupe(id)}
+                  className={`px-2.5 rounded-lg text-xs font-bold transi ${
+                    groupe === id ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
+                  }`}
+                  style={{ height: 34 }}
+                >
+                  {libelle}
+                </button>
+              ))}
+            </div>
+            <p className="text-brume text-xs mt-2 leading-relaxed">
+              En séance, un swipe sur un exercice de ce groupe pourra le remplacer par celui-ci.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -3019,11 +3143,13 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* ------------------------------------------------------------------ */
 
 function VueSeance({
-  seance, profil, etat, charges, faiteCetteSemaine,
-  surRetour, surCoche, surSeries, surCharge, surRepos, surFin, surAnnuler,
+  seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine,
+  surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
+  surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
   const [roue, setRoue] = useState(null); // exo dont on règle la charge
+  const [confirmation, setConfirmation] = useState(false); // séance écourtée
   const etapes = [
     { id: "echauffement" },
     ...seance.exos.map((e) => ({ id: e.id })),
@@ -3032,6 +3158,10 @@ function VueSeance({
   ];
   const nFait = etapes.filter((e) => checks[e.id]).length;
   const tout = nFait === etapes.length;
+  /* exercices réellement faits (variante affichée, pas l'emplacement) */
+  const exosFaits = seance.exos
+    .filter((slot) => checks[slot.id])
+    .map((slot) => etat.remplacements[slot.id] || slot.id);
 
   return (
     <div key={`${profil}-${seance.id}`} className="vue">
@@ -3098,22 +3228,36 @@ function VueSeance({
         </EtapeSimple>
 
         {/* exercices */}
-        {seance.exos.map((exo, i) => (
-          <CarteExo
-            key={exo.id}
-            numero={i + 1}
-            total={seance.exos.length}
-            exo={exo}
-            profil={profil}
-            coche={!!checks[exo.id]}
-            seriesFaites={etat.series[exo.id] || 0}
-            poids={charges[exo.id] || ""}
-            surCoche={() => surCoche(exo.id)}
-            surSeries={(n) => surSeries(exo, n)}
-            surRoue={() => setRoue(exo)}
-            surRepos={() => surRepos(exo)}
-          />
-        ))}
+        {seance.exos.map((slot, i) => {
+          const exoAffiche = (etat.remplacements[slot.id] && dico[etat.remplacements[slot.id]]) || slot;
+          const variantes = exoAffiche.groupe
+            ? tousExos.filter((e) => e.groupe === exoAffiche.groupe)
+            : [];
+          return (
+            <CarteExo
+              key={slot.id}
+              numero={i + 1}
+              total={seance.exos.length}
+              exo={exoAffiche}
+              nomOriginal={exoAffiche.id !== slot.id ? slot.nom : null}
+              variantes={variantes}
+              profil={profil}
+              coche={!!checks[slot.id]}
+              seriesFaites={etat.series[slot.id] || 0}
+              poids={charges[exoAffiche.id] || ""}
+              surCoche={() => surCoche(slot.id)}
+              surSeries={(n) => surSeries(slot.id, exoAffiche.series, n)}
+              surRoue={() => setRoue(exoAffiche)}
+              surRepos={() => surRepos(exoAffiche)}
+              surVariante={(dir) => {
+                if (variantes.length < 2) return;
+                const idx = variantes.findIndex((e) => e.id === exoAffiche.id);
+                const prochaine = variantes[(idx + dir + variantes.length) % variantes.length];
+                surRemplacer(slot.id, prochaine.id);
+              }}
+            />
+          );
+        })}
 
         {/* cardio */}
         <EtapeSimple
@@ -3136,20 +3280,35 @@ function VueSeance({
         </EtapeSimple>
       </div>
 
-      {/* valider */}
+      {/* valider (une séance écourtée se valide aussi) */}
       <button
-        onClick={surFin}
-        disabled={!tout}
+        onClick={() => (tout ? surFin() : setConfirmation(true))}
+        disabled={nFait === 0}
         className={`mt-6 w-full rounded-2xl font-extrabold text-base transi ${
-          tout ? "bg-accent text-accent-ink active:scale-98" : "bg-carte text-brume"
+          nFait > 0 ? "bg-accent text-accent-ink active:scale-98" : "bg-carte text-brume"
         }`}
         style={{ height: 56 }}
       >
-        {tout ? "Valider la séance" : `Encore ${etapes.length - nFait} étape${etapes.length - nFait > 1 ? "s" : ""} à cocher`}
+        {nFait === 0
+          ? "Coche au moins une étape"
+          : tout
+          ? "Valider la séance"
+          : `Valider la séance (${nFait}/${etapes.length})`}
       </button>
       <p className="text-brume text-center text-xs mt-3 leading-relaxed">
         Douleur articulaire vive ? On passe l’exercice, sans culpabiliser — voir Conseils.
       </p>
+
+      {confirmation && (
+        <ConfirmationEcourtee
+          nFait={nFait}
+          total={etapes.length}
+          nbExosFaits={exosFaits.length}
+          surValider={() => { setConfirmation(false); surFin(); }}
+          surValiderEtGarder={() => { setConfirmation(false); surFinAvecSauvegarde(exosFaits); }}
+          surFermer={() => setConfirmation(false)}
+        />
+      )}
 
       {roue && (
         <FeuilleCharge
@@ -3160,6 +3319,51 @@ function VueSeance({
         />
       )}
     </div>
+  );
+}
+
+/* Feuille de confirmation : séance écourtée */
+function ConfirmationEcourtee({ nFait, total, nbExosFaits, surValider, surValiderEtGarder, surFermer }) {
+  useVerrouScroll();
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-xl font-extrabold tracking-tight">Séance écourtée</h3>
+        <p className="text-douce text-sm mt-2 leading-relaxed">
+          {nFait} étape{nFait > 1 ? "s" : ""} sur {total} — c’est déjà ça de pris, et ça compte
+          pareil pour ton assiduité.
+        </p>
+        <div className="mt-5 space-y-2">
+          <button
+            onClick={surValider}
+            className="w-full rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
+            style={{ height: 54 }}
+          >
+            Valider la séance
+          </button>
+          {nbExosFaits > 0 && (
+            <button
+              onClick={surValiderEtGarder}
+              className="w-full rounded-2xl bg-carte2 font-bold text-sm text-douce active:scale-98 transi px-4"
+              style={{ height: 54 }}
+            >
+              Valider + garder cette version en programme « express »
+            </button>
+          )}
+          <button
+            onClick={surFermer}
+            className="w-full rounded-2xl border border-ligne text-brume font-bold text-sm active:scale-98 transi"
+            style={{ height: 48 }}
+          >
+            Continuer la séance
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3289,10 +3493,45 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
   );
 }
 
-function CarteExo({ numero, total, exo, profil, coche, seriesFaites, poids, surCoche, surSeries, surRoue, surRepos }) {
+function CarteExo({
+  numero, total, exo, nomOriginal, variantes = [], profil, coche, seriesFaites, poids,
+  surCoche, surSeries, surRoue, surRepos, surVariante,
+}) {
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
+  const aVariantes = variantes.length > 1;
+  const [glisse, setGlisse] = useState(0);
+  const depart = useRef(null);
+
+  function toucheDebut(e) {
+    if (!aVariantes) return;
+    depart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  function toucheBouge(e) {
+    if (!aVariantes || !depart.current) return;
+    const dx = e.touches[0].clientX - depart.current.x;
+    const dy = e.touches[0].clientY - depart.current.y;
+    if (Math.abs(dy) > Math.abs(dx)) return;
+    setGlisse(Math.max(-90, Math.min(90, dx)));
+  }
+  function toucheFin() {
+    if (glisse <= -55) surVariante(1);
+    else if (glisse >= 55) surVariante(-1);
+    setGlisse(0);
+    depart.current = null;
+  }
+
   return (
-    <div className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}>
+    <div
+      onTouchStart={toucheDebut}
+      onTouchMove={toucheBouge}
+      onTouchEnd={toucheFin}
+      className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}
+      style={{
+        touchAction: "pan-y",
+        transform: glisse ? `translateX(${glisse}px)` : undefined,
+        transition: glisse ? "none" : "transform 0.2s ease",
+      }}
+    >
       <div className="flex items-start gap-3">
         <div className={`flex-1 min-w-0 ${coche ? "opacity-60" : ""}`}>
           <div className="flex items-center gap-2 flex-wrap">
@@ -3300,8 +3539,21 @@ function CarteExo({ numero, total, exo, profil, coche, seriesFaites, poids, surC
               {exo.zone}
             </span>
             <span className="text-brume text-xs chiffres">Exo {numero}/{total}</span>
+            {aVariantes && (
+              <button
+                onClick={() => surVariante(1)}
+                aria-label={`Changer d'exercice (${variantes.length} variantes)`}
+                className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-carte2 text-douce active:scale-95 transi"
+              >
+                <ArrowLeftRight size={11} className="text-accent transi" />
+                variante {variantes.findIndex((e) => e.id === exo.id) + 1}/{variantes.length}
+              </button>
+            )}
           </div>
           <h3 className="font-bold text-base mt-1.5 leading-snug">{exo.nom}</h3>
+          {nomOriginal && (
+            <p className="text-xs text-accent transi mt-0.5">En remplacement de : {nomOriginal}</p>
+          )}
           <p className="text-sm mt-1 chiffres">
             <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
             <span className="text-brume"> · repos {exo.repos} s</span>
