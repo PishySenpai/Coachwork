@@ -3229,6 +3229,8 @@ function VueSeance({
   const exosFaits = seance.exos
     .filter((slot) => checks[slot.id])
     .map((slot) => etat.remplacements[slot.id] || slot.id);
+  /* exercices déjà affichés dans la séance : exclus des variantes (doublons) */
+  const dejaAffiches = new Set(seance.exos.map((s) => etat.remplacements[s.id] || s.id));
 
   return (
     <div key={`${profil}-${seance.id}`} className="vue">
@@ -3298,7 +3300,11 @@ function VueSeance({
         {seance.exos.map((slot, i) => {
           const exoAffiche = (etat.remplacements[slot.id] && dico[etat.remplacements[slot.id]]) || slot;
           const variantes = exoAffiche.groupe
-            ? tousExos.filter((e) => e.groupe === exoAffiche.groupe)
+            ? tousExos.filter(
+                (e) =>
+                  e.groupe === exoAffiche.groupe &&
+                  (e.id === exoAffiche.id || !dejaAffiches.has(e.id))
+              )
             : [];
           return (
             <CarteExo
