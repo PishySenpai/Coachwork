@@ -4,7 +4,7 @@ import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
   Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
-  ChevronUp, Copy, SquarePen, ArrowLeftRight,
+  ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -801,11 +801,45 @@ const EXOS = {
     variante: "Sur un tapis, coussin sous les hanches si besoin.",
     conseil: "Allongé sur le ventre, décolle bras et jambes de quelques centimètres, regard vers le sol.",
   },
+  "squat-pdc": {
+    id: "squat-pdc",
+    nom: "Squat au poids du corps",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "15",
+    repos: 45,
+    sansCharge: true,
+    charge: { esteban: "Rythme soutenu, amplitude complète", valerie: "Vers une chaise pour te repérer au départ" },
+    variante: "Bras tendus devant pour l’équilibre.",
+    conseil: "Pieds à largeur d’épaules, descends comme pour t’asseoir, talons au sol, remonte en serrant les fessiers.",
+  },
+  "squat-sumo": {
+    id: "squat-sumo",
+    nom: "Squat sumo",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Poids du corps, ou haltère de 12–20 kg tenu vertical", valerie: "Poids du corps, puis haltère léger" },
+    variante: "Sur les pointes en haut pour prendre les mollets.",
+    conseil: "Pieds bien plus larges que les épaules, pointes ouvertes, genoux qui suivent les pointes. Vise l’intérieur des cuisses et les fessiers.",
+  },
+  "fentes-bulgares": {
+    id: "fentes-bulgares",
+    nom: "Fentes bulgares (pied arrière surélevé)",
+    zone: "Jambes & fessiers",
+    series: 3,
+    reps: "8 / jambe",
+    repos: 90,
+    charge: { esteban: "Poids du corps, puis 2 haltères de 6–10 kg", valerie: "Poids du corps, une main en appui" },
+    variante: "Chaise, banc ou marche : tout support stable fait l’affaire.",
+    conseil: "Pied arrière posé sur le support, tout le poids sur la jambe avant. Descends droit, genou avant au-dessus de la cheville.",
+  },
 };
 
 /* Catalogue par zone (ordre d'affichage dans le sélecteur) */
 const ZONES = [
-  ["Jambes & fessiers", ["presse", "squat-barre", "goblet", "fentes", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust", "abduction", "adduction", "kickback-fessier", "mollets"]],
+  ["Jambes & fessiers", ["presse", "squat-barre", "goblet", "squat-sumo", "squat-pdc", "fentes", "fentes-bulgares", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust", "abduction", "adduction", "kickback-fessier", "mollets"]],
   ["Poitrine", ["dev-poitrine", "dev-couche", "dev-incline", "pompes", "ecarte", "dips"]],
   ["Épaules", ["dev-epaules", "elevations-laterales", "oiseau", "face-pull", "shrugs"]],
   ["Dos", ["tirage-vertical", "traction-assistee", "rowing", "tirage-horizontal", "rowing-haltere"]],
@@ -875,6 +909,9 @@ const MUSCLES_PAR_EXO = {
   "mountain-climbers": ["abdos", "quadriceps", "epaules"],
   "extension-lombaire": ["lombaires", "fessiers", "ischios"],
   superman: ["lombaires", "fessiers"],
+  "squat-pdc": ["quadriceps", "fessiers"],
+  "squat-sumo": ["quadriceps", "fessiers", "adducteurs"],
+  "fentes-bulgares": ["quadriceps", "fessiers"],
 };
 for (const [id, m] of Object.entries(MUSCLES_PAR_EXO)) {
   if (EXOS[id]) EXOS[id].muscles = m;
@@ -908,6 +945,7 @@ const GROUPES = {
 
 const GROUPE_PAR_EXO = {
   presse: "squat", "squat-barre": "squat", goblet: "squat", fentes: "squat",
+  "squat-sumo": "squat", "squat-pdc": "squat", "fentes-bulgares": "squat",
   "souleve-roumain": "ischios", "leg-curl": "ischios",
   "hip-thrust": "fessiers", "kickback-fessier": "fessiers",
   "leg-extension": "quadriceps",
@@ -1135,6 +1173,25 @@ const PROGRAMMES_BASE = [
       },
     ],
   },
+  {
+    id: "tabata-maison",
+    nom: "Tabata maison",
+    description:
+      "Pas le temps d’aller à la salle ? Sans matériel, à la maison : 20 s d’effort, 10 s de repos, 8 rounds par exercice — et c’est l’app qui fait le chrono (bips, vibrations, écran allumé).",
+    seances: [
+      {
+        id: "T1",
+        badge: "T",
+        titre: "Tabata — Bas du corps",
+        sousTitre: "tabata maison",
+        resume: "Squat · Fentes bulgares · Hip thrust · Sumo",
+        tabata: { travail: 20, repos: 10 },
+        rounds: { "squat-pdc": 8, "fentes-bulgares": 8, "hip-thrust": 8, "squat-sumo": 8 },
+        exos: [EXOS["squat-pdc"], EXOS["fentes-bulgares"], EXOS["hip-thrust"], EXOS["squat-sumo"]],
+        cardio: null,
+      },
+    ],
+  },
 ];
 
 const SEANCES_BASE = PROGRAMMES_BASE.flatMap((p) => p.seances);
@@ -1151,10 +1208,12 @@ function construirePerso(p, dico) {
       id: `${p.id}-s${i}`,
       badge: String(i + 1),
       titre: s.nom,
-      sousTitre: "sur mesure",
+      sousTitre: s.tabata ? "tabata" : "sur mesure",
       resume: s.exoIds.slice(0, 3).map((eid) => (dico[eid] ? dico[eid].nom.split(",")[0] : "")).filter(Boolean).join(" · "),
+      tabata: s.tabata || null,
+      rounds: s.rounds || {},
       exos: s.exoIds.map((eid) => dico[eid]).filter(Boolean),
-      cardio: CARDIO_GENERIQUE,
+      cardio: s.tabata ? null : CARDIO_GENERIQUE,
     })),
   };
 }
@@ -1782,6 +1841,15 @@ export default function App() {
       .filter((slot) => etatSeance.coches[slot.id])
       .map((slot) => {
         const exo = (etatSeance.remplacements[slot.id] && dicoExos[etatSeance.remplacements[slot.id]]) || slot;
+        if (seance.tabata) {
+          return {
+            id: exo.id,
+            nom: exo.nom,
+            series: (seance.rounds && seance.rounds[slot.id]) || 8,
+            reps: `rounds tabata ${seance.tabata.travail}/${seance.tabata.repos}`,
+            charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
+          };
+        }
         return {
           id: exo.id,
           nom: exo.nom,
@@ -1838,6 +1906,7 @@ export default function App() {
       seances: brouillon.seances.map((s, i) => ({
         nom: s.nom.trim() || `Séance ${i + 1}`,
         exoIds: [...s.exoIds],
+        ...(s.tabata ? { tabata: s.tabata, rounds: s.rounds || {} } : {}),
       })),
     };
     const liste = idExistant
@@ -2519,7 +2588,14 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
 function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, surSauver, surSupprimer, surFermer }) {
   const [nom, setNom] = useState(initial ? initial.nom : "");
   const [seances, setSeances] = useState(
-    initial ? initial.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] })) : null
+    initial
+      ? initial.seances.map((s) => ({
+          nom: s.nom,
+          exoIds: [...s.exoIds],
+          tabata: s.tabata ? { ...s.tabata } : null,
+          rounds: { ...(s.rounds || {}) },
+        }))
+      : null
   );
   const [selecteur, setSelecteur] = useState(null); // index de la séance en cours d'ajout
 
@@ -2530,13 +2606,18 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
         icone: SquarePen,
         titre: "Partir de zéro",
         detail: "Compose tes séances librement, exercice par exercice.",
-        seances: [{ nom: "Séance 1", exoIds: [] }],
+        seances: [{ nom: "Séance 1", exoIds: [], tabata: null, rounds: {} }],
       },
       ...PROGRAMMES_BASE.map((p) => ({
         icone: Copy,
         titre: `Copier « ${p.nom} »`,
         detail: "Repars des séances existantes, puis remplace ou ajoute ce que tu veux.",
-        seances: p.seances.map((s) => ({ nom: s.titre, exoIds: s.exos.map((e) => e.id) })),
+        seances: p.seances.map((s) => ({
+          nom: s.titre,
+          exoIds: s.exos.map((e) => e.id),
+          tabata: s.tabata ? { ...s.tabata } : null,
+          rounds: { ...(s.rounds || {}) },
+        })),
       })),
     ];
     return (
@@ -2558,7 +2639,16 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
           {modeles.map((m) => (
             <button
               key={m.titre}
-              onClick={() => setSeances(m.seances.map((s) => ({ nom: s.nom, exoIds: [...s.exoIds] })))}
+              onClick={() =>
+                setSeances(
+                  m.seances.map((s) => ({
+                    nom: s.nom,
+                    exoIds: [...s.exoIds],
+                    tabata: s.tabata ? { ...s.tabata } : null,
+                    rounds: { ...(s.rounds || {}) },
+                  }))
+                )
+              }
               className="w-full rounded-2xl bg-carte border border-ligne p-4 flex items-center gap-4 text-left active:scale-98 transi"
             >
               <span className="h-12 w-12 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
@@ -2603,6 +2693,18 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
         const exoIds = [...s.exoIds];
         [exoIds[idx], exoIds[k]] = [exoIds[k], exoIds[idx]];
         return { ...s, exoIds };
+      })
+    );
+  }
+
+  function majRound(i, exoId) {
+    const paliers = [4, 6, 8, 10, 12];
+    setSeances((prev) =>
+      prev.map((s, j) => {
+        if (j !== i) return s;
+        const actuel = (s.rounds && s.rounds[exoId]) || 8;
+        const suivant = paliers[(paliers.indexOf(actuel) + 1) % paliers.length] || 8;
+        return { ...s, rounds: { ...s.rounds, [exoId]: suivant } };
       })
     );
   }
@@ -2666,6 +2768,44 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
               )}
             </div>
 
+            {/* mode tabata : chrono guidé, rounds par exercice */}
+            <button
+              onClick={() => majSeance(i, { tabata: s.tabata ? null : { travail: 20, repos: 10 } })}
+              aria-pressed={!!s.tabata}
+              className={`w-full rounded-xl border p-3 mb-3 flex items-center gap-3 text-left transi ${
+                s.tabata ? "bordure-accent-douce bg-carte2" : "border-ligne bg-carte2"
+              }`}
+            >
+              <span
+                className={`h-6 w-6 rounded-md flex items-center justify-center shrink-0 transi ${
+                  s.tabata ? "bg-accent" : "bg-carte"
+                }`}
+              >
+                {s.tabata && <Check size={15} strokeWidth={3.5} className="text-accent-ink pop" />}
+              </span>
+              <span className="text-sm font-bold flex-1">
+                Séance Tabata <span className="text-brume font-normal">— chrono guidé par l’app</span>
+              </span>
+            </button>
+            {s.tabata && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {[[20, 10], [30, 15], [40, 20], [45, 15]].map(([t, r]) => (
+                  <button
+                    key={`${t}-${r}`}
+                    onClick={() => majSeance(i, { tabata: { travail: t, repos: r } })}
+                    className={`px-3 rounded-xl text-xs font-bold chiffres transi ${
+                      s.tabata.travail === t && s.tabata.repos === r
+                        ? "bg-accent text-accent-ink"
+                        : "bg-carte2 text-douce"
+                    }`}
+                    style={{ height: 38 }}
+                  >
+                    {t} s / {r} s
+                  </button>
+                ))}
+              </div>
+            )}
+
             {s.exoIds.length === 0 ? (
               <p className="text-brume text-sm text-center py-4">
                 Aucun exercice pour l’instant — ajoute-en avec le bouton ci-dessous.
@@ -2680,8 +2820,19 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
                       <span className="text-brume text-xs chiffres shrink-0 w-4">{idx + 1}</span>
                       <span className="flex-1 min-w-0">
                         <span className="font-bold text-sm block truncate">{exo.nom}</span>
-                        <span className="text-brume text-xs block">{exo.series} × {exo.reps} · {exo.zone}</span>
+                        <span className="text-brume text-xs block chiffres">
+                          {s.tabata ? `${(s.rounds && s.rounds[exoId]) || 8} rounds` : `${exo.series} × ${exo.reps}`} · {exo.zone}
+                        </span>
                       </span>
+                      {s.tabata && (
+                        <button
+                          onClick={() => majRound(i, exoId)}
+                          aria-label={`Changer le nombre de rounds de ${exo.nom}`}
+                          className="h-10 px-2 rounded-lg bg-carte text-accent text-xs font-extrabold chiffres shrink-0 active:scale-95 transi"
+                        >
+                          ×{(s.rounds && s.rounds[exoId]) || 8}
+                        </button>
+                      )}
                       <button
                         onClick={() => deplacerExo(i, idx, -1)}
                         disabled={idx === 0}
@@ -2726,7 +2877,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
 
       {seances.length < 5 && (
         <button
-          onClick={() => setSeances((prev) => [...prev, { nom: `Séance ${prev.length + 1}`, exoIds: [] }])}
+          onClick={() => setSeances((prev) => [...prev, { nom: `Séance ${prev.length + 1}`, exoIds: [], tabata: null, rounds: {} }])}
           className="mt-3 w-full h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
         >
           <Plus size={17} /> Ajouter une séance
@@ -3203,6 +3354,7 @@ function VueSeance({
   surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
+  const [tabataActif, setTabataActif] = useState(null); // {slotId, exo, rounds}
   /* dernière performance enregistrée par exercice (séance validée la plus récente) */
   const dernieresPerfs = useMemo(() => {
     const m = {};
@@ -3220,7 +3372,7 @@ function VueSeance({
   const etapes = [
     { id: "echauffement" },
     ...seance.exos.map((e) => ({ id: e.id })),
-    { id: "cardio" },
+    ...(seance.cardio ? [{ id: "cardio" }] : []),
     { id: "retour" },
   ];
   const nFait = etapes.filter((e) => checks[e.id]).length;
@@ -3319,10 +3471,19 @@ function VueSeance({
               seriesFaites={etat.series[slot.id] || 0}
               poids={charges[exoAffiche.id] || ""}
               dernierePerf={dernieresPerfs[exoAffiche.id]}
+              tabata={seance.tabata || null}
+              rounds={(seance.rounds && seance.rounds[slot.id]) || 8}
               surCoche={() => surCoche(slot.id)}
               surSeries={(n) => surSeries(slot.id, exoAffiche.series, n)}
               surRoue={() => setRoue(exoAffiche)}
               surRepos={() => surRepos(exoAffiche)}
+              surTabata={() =>
+                setTabataActif({
+                  slotId: slot.id,
+                  exo: exoAffiche,
+                  rounds: (seance.rounds && seance.rounds[slot.id]) || 8,
+                })
+              }
               surVariante={(dir) => {
                 if (variantes.length < 2) return;
                 const idx = variantes.findIndex((e) => e.id === exoAffiche.id);
@@ -3333,15 +3494,17 @@ function VueSeance({
           );
         })}
 
-        {/* cardio */}
-        <EtapeSimple
-          icone={HeartPulse}
-          etiquette="Cardio — 15 à 20 min"
-          coche={!!checks["cardio"]}
-          surCoche={() => surCoche("cardio")}
-        >
-          <p className="text-sm text-douce leading-relaxed">{seance.cardio[profil]}</p>
-        </EtapeSimple>
+        {/* cardio (pas en tabata : le tabata EST le cardio) */}
+        {seance.cardio && (
+          <EtapeSimple
+            icone={HeartPulse}
+            etiquette="Cardio — 15 à 20 min"
+            coche={!!checks["cardio"]}
+            surCoche={() => surCoche("cardio")}
+          >
+            <p className="text-sm text-douce leading-relaxed">{seance.cardio[profil]}</p>
+          </EtapeSimple>
+        )}
 
         {/* retour au calme */}
         <EtapeSimple
@@ -3392,6 +3555,20 @@ function VueSeance({
           surFermer={() => setRoue(null)}
         />
       )}
+
+      {tabataActif && seance.tabata && (
+        <MinuteurTabata
+          exo={tabataActif.exo}
+          rounds={tabataActif.rounds}
+          travail={seance.tabata.travail}
+          repos={seance.tabata.repos}
+          surTerminer={() => {
+            surSeries(tabataActif.slotId, tabataActif.rounds, tabataActif.rounds);
+            setTabataActif(null);
+          }}
+          surFermer={() => setTabataActif(null)}
+        />
+      )}
     </div>
   );
 }
@@ -3435,6 +3612,201 @@ function ConfirmationEcourtee({ nFait, total, nbExosFaits, surValider, surValide
             Continuer la séance
           </button>
         </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Chrono Tabata plein écran : bips, vibrations, écran allumé          */
+/* ------------------------------------------------------------------ */
+
+function MinuteurTabata({ exo, rounds, travail, repos, surTerminer, surFermer }) {
+  useVerrouScroll();
+  const ctxAudio = useRef(null);
+  const [pause, setPause] = useState(false);
+  const [etat, setEtat] = useState({ idx: 0, finA: Date.now() + 5000, resteMs: null });
+  const [, setTic] = useState(0);
+
+  const phases = useMemo(() => {
+    const liste = [{ type: "prep", duree: 5 }];
+    for (let r = 1; r <= rounds; r++) {
+      liste.push({ type: "travail", duree: travail, round: r });
+      if (r < rounds) liste.push({ type: "repos", duree: repos, round: r });
+    }
+    return liste;
+  }, [rounds, travail, repos]);
+
+  /* audio (créé au montage : on vient d'un geste utilisateur) */
+  useEffect(() => {
+    try {
+      ctxAudio.current = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {}
+    return () => {
+      try { if (ctxAudio.current) ctxAudio.current.close(); } catch (e) {}
+    };
+  }, []);
+
+  function bip(freq, ms, gain = 0.15) {
+    const ctx = ctxAudio.current;
+    if (!ctx) return;
+    try {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = freq;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(gain, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + ms / 1000);
+      o.start();
+      o.stop(ctx.currentTime + ms / 1000);
+    } catch (e) {}
+  }
+
+  /* écran maintenu allumé pendant le chrono */
+  useEffect(() => {
+    let verrou = null;
+    try {
+      if (navigator.wakeLock) {
+        navigator.wakeLock.request("screen").then((v) => { verrou = v; }).catch(() => {});
+      }
+    } catch (e) {}
+    return () => {
+      try { if (verrou) verrou.release(); } catch (e) {}
+    };
+  }, []);
+
+  /* moteur : basé sur l'horloge */
+  useEffect(() => {
+    if (pause) return;
+    const t = setInterval(() => {
+      setTic((x) => x + 1);
+      setEtat((cur) => {
+        if (Date.now() < cur.finA) return cur;
+        const suivant = cur.idx + 1;
+        if (suivant >= phases.length) return cur;
+        const ph = phases[suivant];
+        return { idx: suivant, finA: Date.now() + ph.duree * 1000, resteMs: null };
+      });
+    }, 200);
+    return () => clearInterval(t);
+  }, [pause, phases]);
+
+  const phase = phases[etat.idx];
+  const reste = pause && etat.resteMs != null
+    ? Math.ceil(etat.resteMs / 1000)
+    : Math.max(0, Math.ceil((etat.finA - Date.now()) / 1000));
+  const finie = etat.idx === phases.length - 1 && !pause && Date.now() >= etat.finA;
+
+  /* signaux de changement de phase */
+  const refIdx = useRef(0);
+  useEffect(() => {
+    if (etat.idx === refIdx.current) return;
+    refIdx.current = etat.idx;
+    const ph = phases[etat.idx];
+    try {
+      if (navigator.vibrate) navigator.vibrate(ph.type === "travail" ? [120, 60, 120] : [280]);
+    } catch (e) {}
+    if (ph.type === "travail") {
+      bip(1150, 150);
+      setTimeout(() => bip(1150, 150), 180);
+    } else {
+      bip(520, 320);
+    }
+  }, [etat.idx, phases]);
+
+  /* décompte 3-2-1 */
+  const refReste = useRef(null);
+  useEffect(() => {
+    if (reste === refReste.current) return;
+    refReste.current = reste;
+    if (!pause && !finie && reste <= 3 && reste >= 1) bip(850, 90, 0.1);
+  });
+
+  /* fin du tabata */
+  useEffect(() => {
+    if (!finie) return;
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 450]); } catch (e) {}
+    bip(1150, 150); setTimeout(() => bip(1350, 150), 190); setTimeout(() => bip(1600, 400), 380);
+    const t = setTimeout(surTerminer, 1400);
+    return () => clearTimeout(t);
+  }, [finie]);
+
+  function basculerPause() {
+    setPause((p) => {
+      if (!p) {
+        setEtat((c) => ({ ...c, resteMs: Math.max(0, c.finA - Date.now()) }));
+        return true;
+      }
+      setEtat((c) => ({ ...c, finA: Date.now() + (c.resteMs != null ? c.resteMs : 0), resteMs: null }));
+      return false;
+    });
+  }
+
+  const libelle = finie
+    ? "Terminé !"
+    : phase.type === "prep"
+    ? "Prépare-toi"
+    : phase.type === "travail"
+    ? "Effort !"
+    : "Repos";
+  const couleur = finie || phase.type === "travail" ? "text-accent" : phase.type === "repos" ? "text-brume" : "text-douce";
+  const fraction = phase.duree ? Math.min(1, Math.max(0, reste / phase.duree)) : 0;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-fond font-jakarta text-encre flex flex-col coussin-haut">
+      <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col px-6 pb-8 coussin-bas">
+        <div className="flex items-center gap-3 pt-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h2>
+            <p className="text-brume text-xs mt-0.5 chiffres">
+              Tabata · {travail} s / {repos} s · {rounds} rounds
+            </p>
+          </div>
+          <button
+            onClick={surFermer}
+            aria-label="Arrêter le tabata"
+            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+          >
+            <X size={20} className="text-brume" />
+          </button>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <p className={`uppercase tracking-widest font-extrabold text-lg transi ${couleur}`}>{libelle}</p>
+          <p
+            className={`chiffres font-extrabold leading-none transi ${finie || phase.type === "travail" ? "text-accent" : ""}`}
+            style={{ fontSize: 120 }}
+          >
+            {finie ? "💪" : reste}
+          </p>
+          <p className="text-brume text-sm chiffres">
+            {phase.type === "prep" || finie ? `${rounds} rounds au programme` : `Round ${phase.round}/${rounds}`}
+          </p>
+          <div className="w-full h-2 rounded-full bg-carte overflow-hidden mt-2">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${fraction * 100}%`, transition: "width 0.2s linear" }}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={basculerPause}
+          disabled={finie}
+          className={`w-full rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 transi ${
+            pause ? "bg-accent text-accent-ink" : "bg-carte border border-ligne text-douce"
+          } active:scale-98`}
+          style={{ height: 60 }}
+        >
+          {pause ? <Play size={20} strokeWidth={2.5} /> : <Pause size={20} strokeWidth={2.5} />}
+          {pause ? "Reprendre" : "Pause"}
+        </button>
+        <p className="text-brume text-center text-xs mt-3">
+          L’écran reste allumé pendant le chrono. Le son sert de repère : 2 bips = effort, 1 bip grave = repos.
+        </p>
       </div>
     </div>,
     document.body
@@ -3569,7 +3941,7 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 
 function CarteExo({
   numero, total, exo, nomOriginal, variantes = [], profil, coche, seriesFaites, poids,
-  dernierePerf, surCoche, surSeries, surRoue, surRepos, surVariante,
+  dernierePerf, tabata, rounds, surCoche, surSeries, surRoue, surRepos, surVariante, surTabata,
 }) {
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const aVariantes = variantes.length > 1;
@@ -3629,8 +4001,17 @@ function CarteExo({
             <p className="text-xs text-accent transi mt-0.5">En remplacement de : {nomOriginal}</p>
           )}
           <p className="text-sm mt-1 chiffres">
-            <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
-            <span className="text-brume"> · repos {exo.repos} s</span>
+            {tabata ? (
+              <>
+                <strong className="text-accent transi">{rounds} rounds</strong>
+                <span className="text-brume"> · {tabata.travail} s effort / {tabata.repos} s repos</span>
+              </>
+            ) : (
+              <>
+                <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
+                <span className="text-brume"> · repos {exo.repos} s</span>
+              </>
+            )}
           </p>
           {dernierePerf ? (
             <p className="text-xs mt-1.5 leading-relaxed">
@@ -3649,6 +4030,7 @@ function CarteExo({
       </div>
 
       {/* séries faites : une pastille par série, tape après chaque série */}
+      {!tabata && (
       <div className="mt-3 flex items-center gap-1.5 flex-wrap">
         <span className="text-xs text-brume font-bold mr-1">Séries</span>
         {Array.from({ length: nbPastilles }).map((_, i) => (
@@ -3674,6 +4056,7 @@ function CarteExo({
         )}
         <span className="text-xs text-brume chiffres ml-auto">{seriesFaites}/{exo.series}</span>
       </div>
+      )}
 
       <div className={coche ? "opacity-50" : ""}>
         {exo.conseil ? <p className="text-xs text-brume mt-3 leading-relaxed">{exo.conseil}</p> : null}
@@ -3707,14 +4090,25 @@ function CarteExo({
               <ChevronDown size={14} className="text-brume shrink-0" />
             </button>
           )}
-          <button
-            onClick={surRepos}
-            className={`rounded-xl bg-carte2 px-4 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
-            style={{ height: 48 }}
-          >
-            <Timer size={17} className="text-accent transi" />
-            Repos {exo.repos} s
-          </button>
+          {tabata ? (
+            <button
+              onClick={surTabata}
+              className={`rounded-xl bg-accent text-accent-ink px-4 font-extrabold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
+              style={{ height: 48 }}
+            >
+              <Play size={16} strokeWidth={2.5} />
+              Lancer · ≈ {Math.max(1, Math.round((5 + rounds * tabata.travail + (rounds - 1) * tabata.repos) / 60))} min
+            </button>
+          ) : (
+            <button
+              onClick={surRepos}
+              className={`rounded-xl bg-carte2 px-4 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
+              style={{ height: 48 }}
+            >
+              <Timer size={17} className="text-accent transi" />
+              Repos {exo.repos} s
+            </button>
+          )}
         </div>
       </div>
     </div>
