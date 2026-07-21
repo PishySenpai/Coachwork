@@ -2176,7 +2176,7 @@ export default function App() {
                 surEditer={(id) => setEdition({ id })}
               />
             ) : onglet === "progres" ? (
-              <VueProgres profil={profil} historique={donnees.historique} />
+              <VueProgres profil={profil} historique={donnees.historique} dico={dicoExos} />
             ) : onglet === "historique" ? (
               <VueHistorique
                 profil={profil}
@@ -2611,7 +2611,7 @@ function CourbeCharge({ points }) {
   );
 }
 
-function VueProgres({ profil, historique }) {
+function VueProgres({ profil, historique, dico }) {
   /* série (date, charge) par exercice, à partir des snapshots d'historique */
   const series = useMemo(() => {
     const m = new Map();
@@ -2627,6 +2627,20 @@ function VueProgres({ profil, historique }) {
     }
     return [...m.values()].sort((a, b) => b.points.length - a.points.length);
   }, [historique]);
+
+  /* exercices regroupés par catégorie (pour la roulette), dans l'ordre des zones */
+  const categories = useMemo(() => {
+    const parZone = new Map();
+    for (const s of series) {
+      const zone = (dico[s.id] && dico[s.id].zone) || "Autres";
+      if (!parZone.has(zone)) parZone.set(zone, []);
+      parZone.get(zone).push({ id: s.id, court: s.nom.split(/[,(]/)[0].trim() });
+    }
+    const ordre = [...ZONES.map(([z]) => z), "Autres"];
+    return ordre
+      .filter((z) => parZone.has(z))
+      .map((z) => ({ zone: z, court: z.split(" & ")[0].split(" (")[0], exos: parZone.get(z) }));
+  }, [series, dico]);
 
   const [choisi, setChoisi] = useState(null);
   const courant = series.find((s) => s.id === choisi) || series[0] || null;
@@ -2656,24 +2670,8 @@ function VueProgres({ profil, historique }) {
         la vraie preuve que ça marche.
       </p>
 
-      {/* sélecteur d'exercice */}
-      <div className="flex gap-2 overflow-x-auto defile pb-1" style={{ scrollbarWidth: "none" }}>
-        {series.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setChoisi(s.id)}
-            className={`shrink-0 px-3 rounded-xl text-xs font-bold transi ${
-              courant.id === s.id ? "bg-accent text-accent-ink" : "bg-carte border border-ligne text-douce"
-            }`}
-            style={{ height: 40 }}
-          >
-            {s.nom.split(",")[0]}
-            <span className={`ml-1.5 chiffres ${courant.id === s.id ? "opacity-70" : "text-brume"}`}>
-              {s.points.length}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* roulette de sélection, triée par catégorie */}
+      <RoueExercices categories={categories} choisi={courant.id} surChoisir={setChoisi} />
 
       <section className="rounded-3xl bg-carte border border-ligne p-4">
         <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -4070,12 +4068,12 @@ const ROUE_ENTIERS = Array.from({ length: 301 }, (_, i) => String(i));
 const ROUE_DECIMALES = [",0", ",5"];
 const ROUE_H = 40;
 
-function Roue({ valeurs, index, surIndex, largeur = 80 }) {
+function Roue({ valeurs, index, surIndex, largeur = 80, ligneH = ROUE_H, hauteur = 200, police }) {
   const ref = useRef(null);
   const minuterie = useRef(null);
 
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = index * ROUE_H;
+    if (ref.current) ref.current.scrollTop = index * ligneH;
     // positionnement initial uniquement
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -4085,7 +4083,7 @@ function Roue({ valeurs, index, surIndex, largeur = 80 }) {
     minuterie.current = setTimeout(() => {
       const el = ref.current;
       if (!el) return;
-      const i = Math.max(0, Math.min(valeurs.length - 1, Math.round(el.scrollTop / ROUE_H)));
+      const i = Math.max(0, Math.min(valeurs.length - 1, Math.round(el.scrollTop / ligneH)));
       if (i !== index) {
         surIndex(i);
         try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
@@ -4093,20 +4091,78 @@ function Roue({ valeurs, index, surIndex, largeur = 80 }) {
     }, 120);
   }
 
+  const marge = (hauteur - ligneH) / 2;
   return (
-    <div ref={ref} onScroll={surScroll} className="roue" style={{ width: largeur, height: 200 }}>
-      <div style={{ height: (200 - ROUE_H) / 2 }} />
+    <div ref={ref} onScroll={surScroll} className="roue" style={{ width: largeur, height: hauteur }}>
+      <div style={{ height: marge }} />
       {valeurs.map((v, i) => (
         <div
           key={i}
-          onClick={() => { surIndex(i); if (ref.current) ref.current.scrollTo({ top: i * ROUE_H, behavior: "smooth" }); }}
+          onClick={() => { surIndex(i); if (ref.current) ref.current.scrollTo({ top: i * ligneH, behavior: "smooth" }); }}
           className={`roue-item chiffres ${i === index ? "roue-active" : ""}`}
-          style={{ height: ROUE_H }}
+          style={{ height: ligneH, fontSize: police }}
         >
-          {v}
+          <span style={{ minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {v}
+          </span>
         </div>
       ))}
-      <div style={{ height: (200 - ROUE_H) / 2 }} />
+      <div style={{ height: marge }} />
+    </div>
+  );
+}
+
+/* Roue de sélection d'exercice, triée par catégorie (Progrès) :
+   colonne gauche = catégorie, colonne droite = exercices de la catégorie */
+function RoueExercices({ categories, choisi, surChoisir }) {
+  const catInit = Math.max(0, categories.findIndex((c) => c.exos.some((e) => e.id === choisi)));
+  const [catIdx, setCatIdx] = useState(catInit);
+  const catCourante = categories[Math.min(catIdx, categories.length - 1)];
+  const [exoIdx, setExoIdx] = useState(
+    Math.max(0, catCourante.exos.findIndex((e) => e.id === choisi))
+  );
+  const exos = catCourante.exos;
+  const exoClamp = Math.min(exoIdx, exos.length - 1);
+
+  const refChoix = useRef(choisi);
+  useEffect(() => {
+    const e = categories[Math.min(catIdx, categories.length - 1)].exos[exoClamp];
+    if (e && e.id !== refChoix.current) {
+      refChoix.current = e.id;
+      surChoisir(e.id);
+    }
+  }, [catIdx, exoClamp, categories, surChoisir]);
+
+  const H = 176;
+  const LH = 40;
+  return (
+    <div className="rounded-3xl bg-carte border border-ligne p-3">
+      <div className="relative flex items-stretch justify-center gap-1">
+        <div
+          className="absolute pointer-events-none rounded-xl bg-carte2"
+          style={{ top: (H - LH) / 2, height: LH, left: 6, right: 6, opacity: 0.45 }}
+        />
+        <Roue
+          valeurs={categories.map((c) => c.court)}
+          index={Math.min(catIdx, categories.length - 1)}
+          surIndex={(i) => { setCatIdx(i); setExoIdx(0); }}
+          largeur={116}
+          ligneH={LH}
+          hauteur={H}
+          police={13}
+        />
+        <div className="w-px bg-ligne my-6" />
+        <Roue
+          key={catIdx}
+          valeurs={exos.map((e) => e.court)}
+          index={exoClamp}
+          surIndex={setExoIdx}
+          largeur={196}
+          ligneH={LH}
+          hauteur={H}
+          police={15}
+        />
+      </div>
     </div>
   );
 }

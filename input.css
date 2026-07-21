@@ -97,6 +97,8 @@ body.fige .coquille {
   font-weight: 600;
   color: #66748a;
   cursor: pointer;
+  overflow: hidden;
+  padding: 0 6px;
   transition: color 0.15s ease;
 }
 .roue-active {
