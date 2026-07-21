@@ -632,6 +632,28 @@ const EXOS = {
     variante: "Ou pompes sur banc si la machine manque.",
     conseil: "Penche-toi légèrement en avant, descends jusqu’à 90° aux coudes — pas plus bas.",
   },
+  butterfly: {
+    id: "butterfly",
+    nom: "Butterfly (pec deck machine)",
+    zone: "Poitrine",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 25–40 kg", valerie: "Départ conseillé : 10–20 kg" },
+    variante: "Écarté à la poulie si la machine est prise.",
+    conseil: "Dos bien calé au dossier, avant-bras sur les coussinets, rapproche les coudes en serrant la poitrine 1 s, reviens en contrôlant.",
+  },
+  "pull-over": {
+    id: "pull-over",
+    nom: "Pull-over à la poulie haute",
+    zone: "Poitrine",
+    series: 3,
+    reps: "12",
+    repos: 60,
+    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
+    variante: "Avec un haltère en travers d’un banc à défaut de poulie.",
+    conseil: "Bras presque tendus, tire la barre vers les cuisses en gardant le buste stable. Tu sens la poitrine et les grands dorsaux travailler ensemble.",
+  },
   "elevations-laterales": {
     id: "elevations-laterales",
     nom: "Élévations latérales, haltères",
@@ -840,7 +862,7 @@ const EXOS = {
 /* Catalogue par zone (ordre d'affichage dans le sélecteur) */
 const ZONES = [
   ["Jambes & fessiers", ["presse", "squat-barre", "goblet", "squat-sumo", "squat-pdc", "fentes", "fentes-bulgares", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust", "abduction", "adduction", "kickback-fessier", "mollets"]],
-  ["Poitrine", ["dev-poitrine", "dev-couche", "dev-incline", "pompes", "ecarte", "dips"]],
+  ["Poitrine", ["dev-poitrine", "dev-couche", "dev-incline", "pompes", "butterfly", "ecarte", "pull-over", "dips"]],
   ["Épaules", ["dev-epaules", "elevations-laterales", "oiseau", "face-pull", "shrugs"]],
   ["Dos", ["tirage-vertical", "traction-assistee", "rowing", "tirage-horizontal", "rowing-haltere"]],
   ["Bras", ["curl-biceps", "curl-marteau", "triceps-poulie"]],
@@ -886,6 +908,8 @@ const MUSCLES_PAR_EXO = {
   "dev-incline": ["pectoraux", "epaules", "triceps"],
   pompes: ["pectoraux", "triceps", "abdos"],
   ecarte: ["pectoraux"],
+  butterfly: ["pectoraux"],
+  "pull-over": ["pectoraux", "dorsaux"],
   dips: ["pectoraux", "triceps"],
   "dev-epaules": ["epaules", "triceps"],
   "elevations-laterales": ["epaules"],
@@ -954,6 +978,7 @@ const GROUPE_PAR_EXO = {
   "dev-poitrine": "poussee-poitrine", "dev-couche": "poussee-poitrine",
   "dev-incline": "poussee-poitrine", pompes: "poussee-poitrine",
   ecarte: "poussee-poitrine", dips: "poussee-poitrine",
+  butterfly: "poussee-poitrine", "pull-over": "poussee-poitrine",
   "dev-epaules": "epaules", "elevations-laterales": "epaules",
   oiseau: "arriere-epaule", "face-pull": "arriere-epaule",
   shrugs: "trapezes",
@@ -968,6 +993,67 @@ const GROUPE_PAR_EXO = {
 };
 for (const [id, g] of Object.entries(GROUPE_PAR_EXO)) {
   if (EXOS[id]) EXOS[id].groupe = g;
+}
+
+/* ------------------------------------------------------------------ */
+/* Estimation d'énergie dépensée (indicative, jamais un objectif)      */
+/* Modèle MET : kcal = MET × poids(kg) × durée(h), avec un petit       */
+/* bonus si la charge est lourde par rapport au poids de corps.         */
+/* ------------------------------------------------------------------ */
+
+const MET_COMPOSE_JAMBES = 6;
+const MET_COMPOSE_HAUT = 5;
+const MET_ISOLATION = 4;
+const MET_GAINAGE = 3.5;
+const MET_TABATA = 8;
+const GROUPES_COMPOSES_HAUT = new Set(["poussee-poitrine", "epaules", "tirage-vertical", "tirage-horizontal"]);
+const GROUPES_COMPOSES_JAMBES = new Set(["squat", "ischios", "fessiers"]);
+
+function parseCharge(v) {
+  if (v == null) return null;
+  const n = parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function metPourExo(exo) {
+  if (!exo) return MET_ISOLATION;
+  if (GROUPES_COMPOSES_JAMBES.has(exo.groupe)) return MET_COMPOSE_JAMBES;
+  if (GROUPES_COMPOSES_HAUT.has(exo.groupe)) return MET_COMPOSE_HAUT;
+  if (exo.zone === "Abdos & gainage") return MET_GAINAGE;
+  return MET_ISOLATION;
+}
+
+/* minutes actives d'un exercice classique : ~45 s de travail par série
+   + le repos prévu entre les séries */
+function minutesExo(series, repos) {
+  return (series * 45 + Math.max(0, series - 1) * (repos || 60)) / 60;
+}
+
+/* kcal d'un exercice fait, à partir des données figées de l'historique */
+function kcalExo(dexo, poidsKg, tabata) {
+  const exo = EXOS[dexo.id];
+  const met = tabata ? MET_TABATA : metPourExo(exo);
+  let minutes;
+  if (tabata) {
+    minutes = (dexo.series * (tabata.travail + tabata.repos)) / 60;
+  } else {
+    minutes = minutesExo(dexo.series, exo ? exo.repos : 60);
+  }
+  const charge = parseCharge(dexo.charge);
+  const bonusCharge = charge ? Math.min(0.3, charge / (poidsKg * 2)) : 0;
+  return met * poidsKg * (minutes / 60) * (1 + bonusCharge);
+}
+
+/* Total séance : exercices faits + échauffement + cardio/étirements.
+   `detail` vient du snapshot ; `poidsKg` du profil ; `tabata` si applicable. */
+function estimerCaloriesSeance(detail, poidsKg, tabata) {
+  if (!poidsKg || !detail) return null;
+  let kcal = 0;
+  for (const dexo of detail) kcal += kcalExo(dexo, poidsKg, tabata);
+  kcal += 3.5 * poidsKg * (7 / 60); // échauffement ~7 min doux
+  if (!tabata) kcal += 5 * poidsKg * (17 / 60); // cardio ~17 min modéré
+  kcal += 2.5 * poidsKg * (5 / 60); // retour au calme ~5 min
+  return Math.round(kcal / 5) * 5; // arrondi à 5 kcal, c'est une estimation
 }
 
 /* Silhouettes stylisées (face / dos) : chaque forme porte éventuellement
@@ -1858,10 +1944,12 @@ export default function App() {
           charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
         };
       });
+    const poidsKg = parseCharge(donnees.mesures.poids);
+    const kcal = estimerCaloriesSeance(detail, poidsKg, seance.tabata || null);
     const deja = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
     const historique = deja
       ? donnees.historique
-      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail }];
+      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
     const vierge = { coches: {}, series: {}, remplacements: {} };
     setStore((prev) => {
       const p = prev[profil];
@@ -1870,7 +1958,7 @@ export default function App() {
       return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: vierge } } };
     });
     setOuverte(null);
-    setFete({ titre: seance.titre, deja, total: historique.length });
+    setFete({ titre: seance.titre, deja, total: historique.length, kcal });
   }
 
   /* Valide une séance écourtée en gardant la version faite comme programme */
@@ -2059,12 +2147,12 @@ export default function App() {
         ) : (
           <>
             {/* onglets */}
-            <div className="grid grid-cols-3 gap-1 rounded-2xl bg-carte p-1 border border-ligne mb-5">
-              {[["semaine", "Ma semaine"], ["historique", "Historique"], ["conseils", "Conseils"]].map(([id, nom]) => (
+            <div className="grid grid-cols-4 gap-1 rounded-2xl bg-carte p-1 border border-ligne mb-5">
+              {[["semaine", "Semaine"], ["progres", "Progrès"], ["historique", "Historique"], ["conseils", "Conseils"]].map(([id, nom]) => (
                 <button
                   key={id}
                   onClick={() => setOnglet(id)}
-                  className={`h-11 rounded-xl text-sm font-bold transi ${
+                  className={`h-11 rounded-xl text-xs font-bold transi ${
                     onglet === id ? "bg-accent text-accent-ink" : "text-brume"
                   }`}
                 >
@@ -2087,6 +2175,8 @@ export default function App() {
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
               />
+            ) : onglet === "progres" ? (
+              <VueProgres profil={profil} historique={donnees.historique} />
             ) : onglet === "historique" ? (
               <VueHistorique
                 profil={profil}
@@ -2180,6 +2270,13 @@ export default function App() {
                 ? "Déjà comptée cette semaine — double dose, chapeau."
                 : MESSAGES_FETE[fete.total % MESSAGES_FETE.length]}
             </p>
+            {fete.kcal ? (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5">
+                <Flame size={15} className="text-accent transi" />
+                <span className="text-sm font-extrabold chiffres text-accent transi">≈ {fete.kcal} kcal</span>
+                <span className="text-xs text-brume">dépensées</span>
+              </div>
+            ) : null}
             <p className="mt-4 text-brume text-xs chiffres">
               {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.cetteSemaine.size} cette semaine
             </p>
@@ -2464,6 +2561,157 @@ function VueSemaine({
 }
 
 /* ------------------------------------------------------------------ */
+/* Vue « Progrès » : évolution des charges par exercice               */
+/* ------------------------------------------------------------------ */
+
+function CourbeCharge({ points }) {
+  const L = 320;
+  const H = 150;
+  const mgG = 34;
+  const mgB = 22;
+  const mgT = 12;
+  const mgD = 10;
+  const larg = L - mgG - mgD;
+  const haut = H - mgT - mgB;
+  const vals = points.map((p) => p.charge);
+  const vmax = Math.max(...vals);
+  const vmin = Math.min(...vals);
+  const pad = (vmax - vmin) * 0.15 || Math.max(1, vmax * 0.1);
+  const haut0 = Math.max(0, vmin - pad);
+  const haut1 = vmax + pad;
+  const n = points.length;
+  const x = (i) => mgG + (n === 1 ? larg / 2 : (i / (n - 1)) * larg);
+  const y = (v) => mgT + haut - ((v - haut0) / (haut1 - haut0 || 1)) * haut;
+
+  const ligne = points.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.charge).toFixed(1)}`).join(" ");
+  const aire = `${ligne} L ${x(n - 1).toFixed(1)} ${(mgT + haut).toFixed(1)} L ${x(0).toFixed(1)} ${(mgT + haut).toFixed(1)} Z`;
+
+  /* 3 graduations d'axe Y */
+  const ticks = [haut0, (haut0 + haut1) / 2, haut1];
+
+  return (
+    <svg viewBox={`0 0 ${L} ${H}`} width="100%" role="img" aria-label="Évolution de la charge" style={{ display: "block" }}>
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={mgG} y1={y(t)} x2={L - mgD} y2={y(t)} className="grille-progres" />
+          <text x={mgG - 6} y={y(t) + 3} textAnchor="end" className="axe-progres chiffres">
+            {Math.round(t)}
+          </text>
+        </g>
+      ))}
+      <path d={aire} className="aire-progres" />
+      <path d={ligne} className="ligne-progres" fill="none" />
+      {points.map((p, i) => (
+        <circle key={i} cx={x(i)} cy={y(p.charge)} r={i === n - 1 ? 5 : 3.5} className="point-progres" />
+      ))}
+      <text x={x(n - 1)} y={y(vals[n - 1]) - 11} textAnchor="middle" className="valeur-progres chiffres">
+        {vals[n - 1]} kg
+      </text>
+    </svg>
+  );
+}
+
+function VueProgres({ profil, historique }) {
+  /* série (date, charge) par exercice, à partir des snapshots d'historique */
+  const series = useMemo(() => {
+    const m = new Map();
+    const tri = [...historique].sort((a, b) => (a.d < b.d ? -1 : 1));
+    for (const h of tri) {
+      if (!h.detail) continue;
+      for (const dexo of h.detail) {
+        const charge = parseCharge(dexo.charge);
+        if (charge == null) continue;
+        if (!m.has(dexo.id)) m.set(dexo.id, { id: dexo.id, nom: dexo.nom, points: [] });
+        m.get(dexo.id).points.push({ d: h.d, charge });
+      }
+    }
+    return [...m.values()].sort((a, b) => b.points.length - a.points.length);
+  }, [historique]);
+
+  const [choisi, setChoisi] = useState(null);
+  const courant = series.find((s) => s.id === choisi) || series[0] || null;
+
+  if (!series.length) {
+    return (
+      <div key={profil} className="vue rounded-3xl bg-carte border border-ligne p-8 text-center">
+        <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
+          <TrendingUp size={28} className="text-accent transi" />
+        </span>
+        <h3 className="mt-4 font-bold text-base">Ta courbe de force arrive</h3>
+        <p className="text-brume text-sm mt-2 leading-relaxed">
+          Note tes charges pendant les séances : dès qu’un exercice aura été fait deux fois, sa
+          progression s’affichera ici.
+        </p>
+      </div>
+    );
+  }
+
+  const pts = courant.points;
+  const delta = pts.length > 1 ? pts[pts.length - 1].charge - pts[0].charge : 0;
+
+  return (
+    <div key={profil} className="vue space-y-4">
+      <p className="text-sm text-brume leading-relaxed">
+        L’évolution de tes charges, exercice par exercice. C’est <strong className="text-douce">ça</strong>,
+        la vraie preuve que ça marche.
+      </p>
+
+      {/* sélecteur d'exercice */}
+      <div className="flex gap-2 overflow-x-auto defile pb-1" style={{ scrollbarWidth: "none" }}>
+        {series.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setChoisi(s.id)}
+            className={`shrink-0 px-3 rounded-xl text-xs font-bold transi ${
+              courant.id === s.id ? "bg-accent text-accent-ink" : "bg-carte border border-ligne text-douce"
+            }`}
+            style={{ height: 40 }}
+          >
+            {s.nom.split(",")[0]}
+            <span className={`ml-1.5 chiffres ${courant.id === s.id ? "opacity-70" : "text-brume"}`}>
+              {s.points.length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <section className="rounded-3xl bg-carte border border-ligne p-4">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h3 className="font-bold text-base leading-tight min-w-0 truncate">{courant.nom}</h3>
+          {pts.length > 1 && (
+            <span
+              className={`text-sm font-extrabold chiffres shrink-0 ${
+                delta > 0 ? "text-accent transi" : delta < 0 ? "text-brume" : "text-brume"
+              }`}
+            >
+              {delta > 0 ? "+" : ""}{delta.toLocaleString("fr-FR")} kg
+            </span>
+          )}
+        </div>
+        {pts.length > 1 ? (
+          <CourbeCharge points={pts} />
+        ) : (
+          <div className="rounded-2xl bg-fond p-5 text-center">
+            <p className="text-2xl font-extrabold chiffres">{pts[0].charge} kg</p>
+            <p className="text-brume text-xs mt-1">
+              Une seule mesure pour l’instant — refais cet exercice pour voir la courbe monter.
+            </p>
+          </div>
+        )}
+        <div className="mt-3 flex items-center justify-between text-xs text-brume chiffres">
+          <span>Première : {pts[0].charge} kg · {FORMAT_MINI.format(depuisCle(pts[0].d))}</span>
+          <span>Dernière : {pts[pts.length - 1].charge} kg</span>
+        </div>
+      </section>
+
+      <p className="text-brume text-center text-xs leading-relaxed">
+        Progresse doucement : quand tu tiens toutes tes séries au haut de la fourchette, monte d’un cran.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Vue « Historique »                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -2534,6 +2782,7 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                         <span className="text-brume text-xs block mt-0.5">
                           {FORMAT_JOUR.format(depuisCle(h.d))}
                           {h.detail ? ` · ${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : ""}
+                          {h.kcal ? ` · ≈ ${h.kcal} kcal` : ""}
                         </span>
                       </span>
                       <ChevronDown

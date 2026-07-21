@@ -59,6 +59,11 @@ body.fige .coquille {
 .defile {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.defile::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* barre flottante du minuteur : au-dessus du home indicator iPhone */
@@ -118,6 +123,14 @@ body.fige .coquille {
 .schema-base { fill: #28323f; }
 .schema-actif { fill: var(--accent); transition: fill 0.2s ease; }
 .schema-texte { fill: #66748a; font-size: 10px; font-weight: 600; }
+
+/* courbe de progression des charges */
+.grille-progres { stroke: rgba(148, 163, 184, 0.12); stroke-width: 1; }
+.axe-progres { fill: #66748a; font-size: 10px; }
+.aire-progres { fill: var(--accent); opacity: 0.12; }
+.ligne-progres { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.point-progres { fill: var(--accent); }
+.valeur-progres { fill: var(--accent); font-size: 11px; font-weight: 800; }
 
 /* ---------- transitions & animations ---------- */
 .transi {
