@@ -1946,10 +1946,10 @@ export default function App() {
       });
     const poidsKg = parseCharge(donnees.mesures.poids);
     const kcal = estimerCaloriesSeance(detail, poidsKg, seance.tabata || null);
-    const deja = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
-    const historique = deja
-      ? donnees.historique
-      : [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
+    /* chaque validation est enregistrée — y compris la même séance refaite
+       dans la semaine (ça arrive, et ça compte) */
+    const repeat = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
+    const historique = [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
     const vierge = { coches: {}, series: {}, remplacements: {} };
     setStore((prev) => {
       const p = prev[profil];
@@ -1958,7 +1958,7 @@ export default function App() {
       return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: vierge } } };
     });
     setOuverte(null);
-    setFete({ titre: seance.titre, deja, total: historique.length, kcal });
+    setFete({ titre: seance.titre, repeat, total: historique.length, kcal });
   }
 
   /* Valide une séance écourtée en gardant la version faite comme programme */
@@ -1976,10 +1976,16 @@ export default function App() {
     terminerSeance(seance);
   }
 
-  /* Annule la validation de cette semaine (cochée par erreur) */
+  /* Annule la DERNIÈRE validation de cette séance cette semaine (cochée par
+     erreur) — si elle a été faite plusieurs fois, n'en retire qu'une */
   function retirerValidation(sid) {
     const lundiActuel = lundiDe(cleJour());
-    majHistorique(donnees.historique.filter((h) => !(h.s === sid && lundiDe(h.d) === lundiActuel)));
+    let idxDernier = -1;
+    donnees.historique.forEach((h, i) => {
+      if (h.s === sid && lundiDe(h.d) === lundiActuel) idxDernier = i;
+    });
+    if (idxDernier === -1) return;
+    majHistorique(donnees.historique.filter((_, i) => i !== idxDernier));
   }
 
   function supprimerEntree(entree) {
@@ -2017,22 +2023,25 @@ export default function App() {
   /* ---- statistiques d’assiduité ---- */
   const stats = useMemo(() => {
     const lundiActuel = lundiDe(cleJour());
-    const parSemaine = new Map();
+    const idsParSemaine = new Map(); // séances distinctes (badge « Faite », série)
+    const nParSemaine = new Map();   // total de validations (anneau, barres)
     for (const h of donnees.historique) {
       const w = lundiDe(h.d);
-      if (!parSemaine.has(w)) parSemaine.set(w, new Set());
-      parSemaine.get(w).add(h.s);
+      if (!idsParSemaine.has(w)) { idsParSemaine.set(w, new Set()); nParSemaine.set(w, 0); }
+      idsParSemaine.get(w).add(h.s);
+      nParSemaine.set(w, nParSemaine.get(w) + 1);
     }
-    const cetteSemaine = parSemaine.get(lundiActuel) || new Set();
+    const cetteSemaine = idsParSemaine.get(lundiActuel) || new Set();
+    const nCetteSemaine = nParSemaine.get(lundiActuel) || 0;
     let serie = 0;
-    let w = parSemaine.has(lundiActuel) ? lundiActuel : semainesAvant(lundiActuel, 1);
-    while (parSemaine.has(w) && parSemaine.get(w).size > 0) { serie++; w = semainesAvant(w, 1); }
+    let w = idsParSemaine.has(lundiActuel) ? lundiActuel : semainesAvant(lundiActuel, 1);
+    while (idsParSemaine.has(w) && idsParSemaine.get(w).size > 0) { serie++; w = semainesAvant(w, 1); }
     const barres = [];
     for (let i = 5; i >= 0; i--) {
       const wk = semainesAvant(lundiActuel, i);
-      barres.push({ semaine: wk, n: (parSemaine.get(wk) || new Set()).size });
+      barres.push({ semaine: wk, n: nParSemaine.get(wk) || 0 });
     }
-    return { total: donnees.historique.length, cetteSemaine, serie, barres };
+    return { total: donnees.historique.length, cetteSemaine, nCetteSemaine, serie, barres };
   }, [store, profil]);
 
   /* ---- écran de verrouillage ---- */
@@ -2266,8 +2275,8 @@ export default function App() {
             <h2 className="mt-5 text-2xl font-extrabold tracking-tight">Séance validée !</h2>
             <p className="mt-1 text-brume text-sm">{fete.titre}</p>
             <p className="mt-3 text-douce text-sm leading-relaxed">
-              {fete.deja
-                ? "Déjà comptée cette semaine — double dose, chapeau."
+              {fete.repeat
+                ? "Deuxième fois cette semaine sur cette séance — double dose, chapeau. Elle compte, évidemment."
                 : MESSAGES_FETE[fete.total % MESSAGES_FETE.length]}
             </p>
             {fete.kcal ? (
@@ -2278,7 +2287,7 @@ export default function App() {
               </div>
             ) : null}
             <p className="mt-4 text-brume text-xs chiffres">
-              {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.cetteSemaine.size} cette semaine
+              {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.nCetteSemaine} cette semaine
             </p>
             <button
               onClick={() => setFete(null)}
@@ -2320,7 +2329,7 @@ function VueSemaine({
       <section className="rounded-3xl bg-carte border border-ligne p-5">
         <div className="flex items-center gap-5">
           <Anneau
-            fait={Math.min(stats.cetteSemaine.size, progActuel.seances.length)}
+            fait={stats.nCetteSemaine}
             total={progActuel.seances.length}
           />
           <div className="flex-1 space-y-3">
