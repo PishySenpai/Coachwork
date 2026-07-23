@@ -1415,9 +1415,26 @@ const CONSEILS = [
 /* Une séance en cours stocke les étapes cochées et les séries faites.
    (migration : les anciennes données étaient directement la carte des coches) */
 function normaliserSeance(brut) {
-  if (!brut) return { coches: {}, series: {}, remplacements: {} };
-  if (brut.coches) return { coches: brut.coches, series: brut.series || {}, remplacements: brut.remplacements || {} };
-  return { coches: brut, series: {}, remplacements: {} };
+  if (!brut) return { coches: {}, series: {}, remplacements: {}, ajouts: [] };
+  if (brut.coches)
+    return {
+      coches: brut.coches,
+      series: brut.series || {},
+      remplacements: brut.remplacements || {},
+      ajouts: brut.ajouts || [],
+    };
+  return { coches: brut, series: {}, remplacements: {}, ajouts: [] };
+}
+
+/* retire un emplacement (ajout) et nettoie ses coches/séries/remplacement */
+function retirerSlot(seance, slotId) {
+  const sansCle = (o) => { const c = { ...o }; delete c[slotId]; return c; };
+  return {
+    coches: sansCle(seance.coches),
+    series: sansCle(seance.series),
+    remplacements: sansCle(seance.remplacements),
+    ajouts: seance.ajouts.filter((a) => a.slotId !== slotId),
+  };
 }
 
 async function chargerTout() {
@@ -1885,6 +1902,44 @@ export default function App() {
     });
   }
 
+  /* ajout / retrait d'un exercice sur la séance en cours (ne touche pas au
+     programme) : toggle par exercice depuis le sélecteur */
+  function basculerAjout(sid, exoId) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const existant = seance.ajouts.find((a) => a.exoId === exoId && !seance.remplacements[a.slotId]);
+      let maj;
+      if (existant) {
+        maj = retirerSlot(seance, existant.slotId);
+      } else {
+        const slotId = `ajout-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        maj = { ...seance, ajouts: [...seance.ajouts, { slotId, exoId, rounds: 8 }] };
+      }
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
+  function retirerAjout(sid, slotId) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const maj = retirerSlot(normaliserSeance(p.seances[sid]), slotId);
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
+  function noterRoundsAjout(sid, slotId, rounds) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const maj = { ...seance, ajouts: seance.ajouts.map((a) => (a.slotId === slotId ? { ...a, rounds } : a)) };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
   function noterCharge(exoId, valeur) {
     setStore((prev) => {
       const p = prev[profil];
@@ -1921,17 +1976,22 @@ export default function App() {
 
   function terminerSeance(seance) {
     const auj = cleJour();
-    /* instantané de la séance : exercices réellement faits, séries et charges du jour */
+    /* instantané de la séance : exercices réellement faits (programme + ajouts),
+       séries et charges du jour */
     const etatSeance = normaliserSeance(donnees.seances[seance.id]);
-    const detail = seance.exos
-      .filter((slot) => etatSeance.coches[slot.id])
-      .map((slot) => {
-        const exo = (etatSeance.remplacements[slot.id] && dicoExos[etatSeance.remplacements[slot.id]]) || slot;
+    const slots = [
+      ...seance.exos.map((e) => ({ slotId: e.id, base: e, rounds: (seance.rounds && seance.rounds[e.id]) || 8 })),
+      ...etatSeance.ajouts.map((a) => ({ slotId: a.slotId, base: dicoExos[a.exoId], rounds: a.rounds || 8, ajout: true })),
+    ];
+    const detail = slots
+      .filter((s) => s.base && etatSeance.coches[s.slotId])
+      .map((s) => {
+        const exo = (etatSeance.remplacements[s.slotId] && dicoExos[etatSeance.remplacements[s.slotId]]) || s.base;
         if (seance.tabata) {
           return {
             id: exo.id,
             nom: exo.nom,
-            series: (seance.rounds && seance.rounds[slot.id]) || 8,
+            series: s.rounds,
             reps: `rounds tabata ${seance.tabata.travail}/${seance.tabata.repos}`,
             charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
           };
@@ -1939,7 +1999,7 @@ export default function App() {
         return {
           id: exo.id,
           nom: exo.nom,
-          series: etatSeance.series[slot.id] || exo.series,
+          series: etatSeance.series[s.slotId] || exo.series,
           reps: exo.reps,
           charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
         };
@@ -1950,7 +2010,7 @@ export default function App() {
        dans la semaine (ça arrive, et ça compte) */
     const repeat = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
     const historique = [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
-    const vierge = { coches: {}, series: {}, remplacements: {} };
+    const vierge = { coches: {}, series: {}, remplacements: {}, ajouts: [] };
     setStore((prev) => {
       const p = prev[profil];
       ecrire(`${profil}:assiduite`, { historique });
@@ -2149,6 +2209,12 @@ export default function App() {
             surCharge={noterCharge}
             surRepos={lancerRepos}
             historique={donnees.historique}
+            exosPerso={exosPerso}
+            surSauverExo={sauverExoPerso}
+            surSupprimerExo={supprimerExoPerso}
+            surBasculerAjout={(exoId) => basculerAjout(seanceOuverte.id, exoId)}
+            surRetirerAjout={(slotId) => retirerAjout(seanceOuverte.id, slotId)}
+            surRoundsAjout={(slotId, rounds) => noterRoundsAjout(seanceOuverte.id, slotId, rounds)}
             surFin={() => terminerSeance(seanceOuverte)}
             surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
             surAnnuler={() => retirerValidation(seanceOuverte.id)}
@@ -3606,10 +3672,13 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 
 function VueSeance({
   seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
+  exosPerso, surSauverExo, surSupprimerExo,
   surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
+  surBasculerAjout, surRetirerAjout, surRoundsAjout,
   surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
+  const [ajoutOuvert, setAjoutOuvert] = useState(false);
   const [tabataActif, setTabataActif] = useState(null); // {slotId, exo, rounds}
   /* dernière performance enregistrée par exercice (séance validée la plus récente) */
   const dernieresPerfs = useMemo(() => {
@@ -3625,20 +3694,29 @@ function VueSeance({
   }, [historique]);
   const [roue, setRoue] = useState(null); // exo dont on règle la charge
   const [confirmation, setConfirmation] = useState(false); // séance écourtée
+
+  /* emplacements = exercices du programme + ajouts propres à cette séance */
+  const slots = [
+    ...seance.exos.map((e) => ({ slotId: e.id, base: e, roundsBase: (seance.rounds && seance.rounds[e.id]) || 8, ajout: false })),
+    ...etat.ajouts
+      .map((a) => ({ slotId: a.slotId, base: dico[a.exoId], roundsBase: a.rounds || 8, ajout: true }))
+      .filter((s) => s.base),
+  ];
+
   const etapes = [
     { id: "echauffement" },
-    ...seance.exos.map((e) => ({ id: e.id })),
+    ...slots.map((s) => ({ id: s.slotId })),
     ...(seance.cardio ? [{ id: "cardio" }] : []),
     { id: "retour" },
   ];
   const nFait = etapes.filter((e) => checks[e.id]).length;
   const tout = nFait === etapes.length;
   /* exercices réellement faits (variante affichée, pas l'emplacement) */
-  const exosFaits = seance.exos
-    .filter((slot) => checks[slot.id])
-    .map((slot) => etat.remplacements[slot.id] || slot.id);
+  const exosFaits = slots
+    .filter((s) => checks[s.slotId])
+    .map((s) => etat.remplacements[s.slotId] || s.base.id);
   /* exercices déjà affichés dans la séance : exclus des variantes (doublons) */
-  const dejaAffiches = new Set(seance.exos.map((s) => etat.remplacements[s.id] || s.id));
+  const dejaAffiches = new Set(slots.map((s) => etat.remplacements[s.slotId] || s.base.id));
 
   return (
     <div key={`${profil}-${seance.id}`} className="vue">
@@ -3704,9 +3782,9 @@ function VueSeance({
           </ul>
         </EtapeSimple>
 
-        {/* exercices */}
-        {seance.exos.map((slot, i) => {
-          const exoAffiche = (etat.remplacements[slot.id] && dico[etat.remplacements[slot.id]]) || slot;
+        {/* exercices (programme + ajouts) */}
+        {slots.map((s, i) => {
+          const exoAffiche = (etat.remplacements[s.slotId] && dico[etat.remplacements[s.slotId]]) || s.base;
           const variantes = exoAffiche.groupe
             ? tousExos.filter(
                 (e) =>
@@ -3716,39 +3794,52 @@ function VueSeance({
             : [];
           return (
             <CarteExo
-              key={slot.id}
+              key={s.slotId}
               numero={i + 1}
-              total={seance.exos.length}
+              total={slots.length}
               exo={exoAffiche}
-              nomOriginal={exoAffiche.id !== slot.id ? slot.nom : null}
+              nomOriginal={!s.ajout && exoAffiche.id !== s.base.id ? s.base.nom : null}
+              estAjout={s.ajout}
               variantes={variantes}
               profil={profil}
-              coche={!!checks[slot.id]}
-              seriesFaites={etat.series[slot.id] || 0}
+              coche={!!checks[s.slotId]}
+              seriesFaites={etat.series[s.slotId] || 0}
               poids={charges[exoAffiche.id] || ""}
               dernierePerf={dernieresPerfs[exoAffiche.id]}
               tabata={seance.tabata || null}
-              rounds={(seance.rounds && seance.rounds[slot.id]) || 8}
-              surCoche={() => surCoche(slot.id)}
-              surSeries={(n) => surSeries(slot.id, exoAffiche.series, n)}
+              rounds={s.roundsBase}
+              surCoche={() => surCoche(s.slotId)}
+              surSeries={(n) => surSeries(s.slotId, exoAffiche.series, n)}
               surRoue={() => setRoue(exoAffiche)}
               surRepos={() => surRepos(exoAffiche)}
-              surTabata={() =>
-                setTabataActif({
-                  slotId: slot.id,
-                  exo: exoAffiche,
-                  rounds: (seance.rounds && seance.rounds[slot.id]) || 8,
-                })
+              surTabata={() => setTabataActif({ slotId: s.slotId, exo: exoAffiche, rounds: s.roundsBase })}
+              surRetirer={s.ajout ? () => surRetirerAjout(s.slotId) : null}
+              surRoundsCycle={
+                s.ajout && seance.tabata
+                  ? () => {
+                      const paliers = [2, 4, 6, 8, 10, 12];
+                      const prochain = paliers[(paliers.indexOf(s.roundsBase) + 1) % paliers.length] || 8;
+                      surRoundsAjout(s.slotId, prochain);
+                    }
+                  : null
               }
               surVariante={(dir) => {
                 if (variantes.length < 2) return;
                 const idx = variantes.findIndex((e) => e.id === exoAffiche.id);
                 const prochaine = variantes[(idx + dir + variantes.length) % variantes.length];
-                surRemplacer(slot.id, prochaine.id);
+                surRemplacer(s.slotId, prochaine.id);
               }}
             />
           );
         })}
+
+        {/* ajouter un exercice à la volée (ne modifie pas le programme) */}
+        <button
+          onClick={() => setAjoutOuvert(true)}
+          className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+        >
+          <Plus size={17} className="text-accent transi" /> Ajouter un exercice
+        </button>
 
         {/* cardio (pas en tabata : le tabata EST le cardio) */}
         {seance.cardio && (
@@ -3823,6 +3914,19 @@ function VueSeance({
             setTabataActif(null);
           }}
           surFermer={() => setTabataActif(null)}
+        />
+      )}
+
+      {ajoutOuvert && (
+        <SelecteurExos
+          nomSeance={`À ajouter à ${seance.titre}`}
+          exoIds={etat.ajouts.filter((a) => !etat.remplacements[a.slotId]).map((a) => a.exoId)}
+          dico={dico}
+          exosPerso={exosPerso}
+          surSauverExo={surSauverExo}
+          surSupprimerExo={surSupprimerExo}
+          surBasculer={surBasculerAjout}
+          surFermer={() => setAjoutOuvert(false)}
         />
       )}
     </div>
@@ -4254,8 +4358,9 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 }
 
 function CarteExo({
-  numero, total, exo, nomOriginal, variantes = [], profil, coche, seriesFaites, poids,
+  numero, total, exo, nomOriginal, estAjout, variantes = [], profil, coche, seriesFaites, poids,
   dernierePerf, tabata, rounds, surCoche, surSeries, surRoue, surRepos, surVariante, surTabata,
+  surRetirer, surRoundsCycle,
 }) {
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const aVariantes = variantes.length > 1;
@@ -4298,7 +4403,18 @@ function CarteExo({
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-accent-soft text-accent transi">
               {exo.zone}
             </span>
-            <span className="text-brume text-xs chiffres">Exo {numero}/{total}</span>
+            <span className="text-brume text-xs chiffres">
+              {estAjout ? "Ajout" : `Exo ${numero}/${total}`}
+            </span>
+            {estAjout && surRoundsCycle && (
+              <button
+                onClick={surRoundsCycle}
+                aria-label="Changer le nombre de rounds"
+                className="text-xs font-extrabold chiffres px-2 py-0.5 rounded-full bg-carte2 text-accent active:scale-95 transi"
+              >
+                ×{rounds}
+              </button>
+            )}
             {aVariantes && (
               <button
                 onClick={() => surVariante(1)}
@@ -4340,7 +4456,18 @@ function CarteExo({
             <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[profil]}</p>
           )}
         </div>
-        <CaseCoche coche={coche} surClic={surCoche} />
+        <div className="flex flex-col items-center gap-2 shrink-0">
+          <CaseCoche coche={coche} surClic={surCoche} />
+          {surRetirer && (
+            <button
+              onClick={surRetirer}
+              aria-label={`Retirer ${exo.nom} de la séance`}
+              className="h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center active:scale-95 transi"
+            >
+              <Trash2 size={15} className="text-brume" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* séries faites : une pastille par série, tape après chaque série */}
