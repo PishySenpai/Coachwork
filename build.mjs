@@ -24,7 +24,7 @@ const js = readFileSync("dist/bundle.js", "utf8").replaceAll("</script", "<\\/sc
 const css = readFileSync("fonts.css", "utf8") + readFileSync("dist/tw.css", "utf8");
 
 const corps = `<title>Coachwork — Programme duo</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <style>${css}</style>
 <div id="root"></div>
 <script>${js}</script>

@@ -1817,6 +1817,26 @@ export default function App() {
     } catch (e) {}
   }, []);
 
+  /* ---- zoom désactivé : Safari ignore user-scalable=no hors app installée.
+     `touch-action: pan-y` (CSS) supprime le double-tap et le pincement ;
+     ici on neutralise en plus les gestes de zoom propres à iOS.
+     Volontairement rien sur le double-tap en JS : ça annulerait le second
+     clic quand on tape vite deux pastilles de série. ---- */
+  useEffect(() => {
+    const stop = (e) => e.preventDefault();
+    const stopPincement = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };
+    document.addEventListener("gesturestart", stop);
+    document.addEventListener("gesturechange", stop);
+    document.addEventListener("gestureend", stop);
+    document.addEventListener("touchmove", stopPincement, { passive: false });
+    return () => {
+      document.removeEventListener("gesturestart", stop);
+      document.removeEventListener("gesturechange", stop);
+      document.removeEventListener("gestureend", stop);
+      document.removeEventListener("touchmove", stopPincement);
+    };
+  }, []);
+
   /* ---- minuteur de repos : basé sur l'horloge, il continue même
      si l'app passe en arrière-plan ---- */
   useEffect(() => {

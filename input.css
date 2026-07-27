@@ -28,11 +28,14 @@ body {
 }
 
 /* Coquille applicative : le document ne défile jamais (fini le rebond iOS
-   et le scroll horizontal fantôme) ; seul .coquille défile, verticalement. */
+   et le scroll horizontal fantôme) ; seul .coquille défile, verticalement.
+   pan-y (et pas manipulation) : le défilement vertical reste, le pincement
+   et le double-tap pour zoomer sont neutralisés — on est dans une app. */
 html, body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-y;
 }
 .coquille {
   height: 100vh;
@@ -40,6 +43,7 @@ html, body {
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding-top: env(safe-area-inset-top, 0px);
 }
 @supports (height: 100dvh) {
