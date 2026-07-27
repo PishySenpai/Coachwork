@@ -632,6 +632,21 @@ const EXOS = {
     variante: "Ou pompes sur banc si la machine manque.",
     conseil: "Penche-toi légèrement en avant, descends jusqu’à 90° aux coudes — pas plus bas.",
   },
+  "dev-couche-barre": {
+    id: "dev-couche-barre",
+    nom: "Développé couché à la barre",
+    zone: "Poitrine",
+    series: 3,
+    reps: "8–10",
+    repos: 120,
+    charge: {
+      esteban: "Barre seule (20 kg) pour caler la technique, puis +2,5 kg par côté",
+      valerie: "Barre légère ou barre guidée (Smith), amplitude confortable",
+    },
+    variante: "À la barre guidée (Smith) ou aux haltères pour démarrer en sécurité.",
+    conseil:
+      "Omoplates serrées, pieds ancrés au sol, barre descendue au milieu de la poitrine puis poussée sans rebond. Toujours un pareur ou des sécurités quand tu charges.",
+  },
   butterfly: {
     id: "butterfly",
     nom: "Butterfly (pec deck machine)",
@@ -862,7 +877,7 @@ const EXOS = {
 /* Catalogue par zone (ordre d'affichage dans le sélecteur) */
 const ZONES = [
   ["Jambes & fessiers", ["presse", "squat-barre", "goblet", "squat-sumo", "squat-pdc", "fentes", "fentes-bulgares", "souleve-roumain", "leg-curl", "leg-extension", "hip-thrust", "abduction", "adduction", "kickback-fessier", "mollets"]],
-  ["Poitrine", ["dev-poitrine", "dev-couche", "dev-incline", "pompes", "butterfly", "ecarte", "pull-over", "dips"]],
+  ["Poitrine", ["dev-poitrine", "dev-couche-barre", "dev-couche", "dev-incline", "pompes", "butterfly", "ecarte", "pull-over", "dips"]],
   ["Épaules", ["dev-epaules", "elevations-laterales", "oiseau", "face-pull", "shrugs"]],
   ["Dos", ["tirage-vertical", "traction-assistee", "rowing", "tirage-horizontal", "rowing-haltere"]],
   ["Bras", ["curl-biceps", "curl-marteau", "triceps-poulie"]],
@@ -905,6 +920,7 @@ const MUSCLES_PAR_EXO = {
   mollets: ["mollets"],
   "dev-poitrine": ["pectoraux", "triceps", "epaules"],
   "dev-couche": ["pectoraux", "triceps", "epaules"],
+  "dev-couche-barre": ["pectoraux", "triceps", "epaules"],
   "dev-incline": ["pectoraux", "epaules", "triceps"],
   pompes: ["pectoraux", "triceps", "abdos"],
   ecarte: ["pectoraux"],
@@ -976,6 +992,7 @@ const GROUPE_PAR_EXO = {
   abduction: "hanches", adduction: "hanches",
   mollets: "mollets",
   "dev-poitrine": "poussee-poitrine", "dev-couche": "poussee-poitrine",
+  "dev-couche-barre": "poussee-poitrine",
   "dev-incline": "poussee-poitrine", pompes: "poussee-poitrine",
   ecarte: "poussee-poitrine", dips: "poussee-poitrine",
   butterfly: "poussee-poitrine", "pull-over": "poussee-poitrine",
@@ -1415,15 +1432,16 @@ const CONSEILS = [
 /* Une séance en cours stocke les étapes cochées et les séries faites.
    (migration : les anciennes données étaient directement la carte des coches) */
 function normaliserSeance(brut) {
-  if (!brut) return { coches: {}, series: {}, remplacements: {}, ajouts: [] };
+  if (!brut) return { coches: {}, series: {}, remplacements: {}, ajouts: [], ordre: [] };
   if (brut.coches)
     return {
       coches: brut.coches,
       series: brut.series || {},
       remplacements: brut.remplacements || {},
       ajouts: brut.ajouts || [],
+      ordre: brut.ordre || [],
     };
-  return { coches: brut, series: {}, remplacements: {}, ajouts: [] };
+  return { coches: brut, series: {}, remplacements: {}, ajouts: [], ordre: [] };
 }
 
 /* retire un emplacement (ajout) et nettoie ses coches/séries/remplacement */
@@ -1434,7 +1452,20 @@ function retirerSlot(seance, slotId) {
     series: sansCle(seance.series),
     remplacements: sansCle(seance.remplacements),
     ajouts: seance.ajouts.filter((a) => a.slotId !== slotId),
+    ordre: seance.ordre.filter((id) => id !== slotId),
   };
+}
+
+/* ordre d'affichage des emplacements : l'ordre choisi pour la séance du jour
+   d'abord (s'il existe), puis tout emplacement non encore classé */
+function ordonnerSlots(slots, ordre) {
+  if (!ordre || !ordre.length) return slots;
+  const rang = new Map(ordre.map((id, i) => [id, i]));
+  return [...slots].sort((a, b) => {
+    const ra = rang.has(a.slotId) ? rang.get(a.slotId) : Infinity;
+    const rb = rang.has(b.slotId) ? rang.get(b.slotId) : Infinity;
+    return ra - rb;
+  });
 }
 
 async function chargerTout() {
@@ -1930,6 +1961,32 @@ export default function App() {
     });
   }
 
+  /* réordonne un exercice dans la séance du jour (le programme reste intact) */
+  function deplacerSlot(sid, slotIds, slotId, dir) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const liste = [...slotIds];
+      const i = liste.indexOf(slotId);
+      const j = i + dir;
+      if (i === -1 || j < 0 || j >= liste.length) return prev;
+      [liste[i], liste[j]] = [liste[j], liste[i]];
+      const maj = { ...seance, ordre: liste };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
+  function reinitialiserOrdre(sid) {
+    setStore((prev) => {
+      const p = prev[profil];
+      const seance = normaliserSeance(p.seances[sid]);
+      const maj = { ...seance, ordre: [] };
+      ecrire(`${profil}:seance:${sid}`, maj);
+      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+    });
+  }
+
   function noterRoundsAjout(sid, slotId, rounds) {
     setStore((prev) => {
       const p = prev[profil];
@@ -1979,10 +2036,13 @@ export default function App() {
     /* instantané de la séance : exercices réellement faits (programme + ajouts),
        séries et charges du jour */
     const etatSeance = normaliserSeance(donnees.seances[seance.id]);
-    const slots = [
-      ...seance.exos.map((e) => ({ slotId: e.id, base: e, rounds: (seance.rounds && seance.rounds[e.id]) || 8 })),
-      ...etatSeance.ajouts.map((a) => ({ slotId: a.slotId, base: dicoExos[a.exoId], rounds: a.rounds || 8, ajout: true })),
-    ];
+    const slots = ordonnerSlots(
+      [
+        ...seance.exos.map((e) => ({ slotId: e.id, base: e, rounds: (seance.rounds && seance.rounds[e.id]) || 8 })),
+        ...etatSeance.ajouts.map((a) => ({ slotId: a.slotId, base: dicoExos[a.exoId], rounds: a.rounds || 8, ajout: true })),
+      ],
+      etatSeance.ordre
+    );
     const detail = slots
       .filter((s) => s.base && etatSeance.coches[s.slotId])
       .map((s) => {
@@ -2010,7 +2070,7 @@ export default function App() {
        dans la semaine (ça arrive, et ça compte) */
     const repeat = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
     const historique = [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
-    const vierge = { coches: {}, series: {}, remplacements: {}, ajouts: [] };
+    const vierge = { coches: {}, series: {}, remplacements: {}, ajouts: [], ordre: [] };
     setStore((prev) => {
       const p = prev[profil];
       ecrire(`${profil}:assiduite`, { historique });
@@ -2215,6 +2275,8 @@ export default function App() {
             surBasculerAjout={(exoId) => basculerAjout(seanceOuverte.id, exoId)}
             surRetirerAjout={(slotId) => retirerAjout(seanceOuverte.id, slotId)}
             surRoundsAjout={(slotId, rounds) => noterRoundsAjout(seanceOuverte.id, slotId, rounds)}
+            surDeplacer={(slotIds, slotId, dir) => deplacerSlot(seanceOuverte.id, slotIds, slotId, dir)}
+            surReinitOrdre={() => reinitialiserOrdre(seanceOuverte.id)}
             surFin={() => terminerSeance(seanceOuverte)}
             surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
             surAnnuler={() => retirerValidation(seanceOuverte.id)}
@@ -3674,7 +3736,7 @@ function VueSeance({
   seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
   exosPerso, surSauverExo, surSupprimerExo,
   surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
-  surBasculerAjout, surRetirerAjout, surRoundsAjout,
+  surBasculerAjout, surRetirerAjout, surRoundsAjout, surDeplacer, surReinitOrdre,
   surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
@@ -3695,13 +3757,19 @@ function VueSeance({
   const [roue, setRoue] = useState(null); // exo dont on règle la charge
   const [confirmation, setConfirmation] = useState(false); // séance écourtée
 
-  /* emplacements = exercices du programme + ajouts propres à cette séance */
-  const slots = [
-    ...seance.exos.map((e) => ({ slotId: e.id, base: e, roundsBase: (seance.rounds && seance.rounds[e.id]) || 8, ajout: false })),
-    ...etat.ajouts
-      .map((a) => ({ slotId: a.slotId, base: dico[a.exoId], roundsBase: a.rounds || 8, ajout: true }))
-      .filter((s) => s.base),
-  ];
+  /* emplacements = exercices du programme + ajouts propres à cette séance,
+     dans l'ordre choisi pour la séance du jour */
+  const slots = ordonnerSlots(
+    [
+      ...seance.exos.map((e) => ({ slotId: e.id, base: e, roundsBase: (seance.rounds && seance.rounds[e.id]) || 8, ajout: false })),
+      ...etat.ajouts
+        .map((a) => ({ slotId: a.slotId, base: dico[a.exoId], roundsBase: a.rounds || 8, ajout: true }))
+        .filter((s) => s.base),
+    ],
+    etat.ordre
+  );
+  const slotIds = slots.map((s) => s.slotId);
+  const ordreModifie = etat.ordre && etat.ordre.length > 0;
 
   const etapes = [
     { id: "echauffement" },
@@ -3814,6 +3882,8 @@ function VueSeance({
               surRepos={() => surRepos(exoAffiche)}
               surTabata={() => setTabataActif({ slotId: s.slotId, exo: exoAffiche, rounds: s.roundsBase })}
               surRetirer={s.ajout ? () => surRetirerAjout(s.slotId) : null}
+              surMonter={i > 0 ? () => surDeplacer(slotIds, s.slotId, -1) : null}
+              surDescendre={i < slots.length - 1 ? () => surDeplacer(slotIds, s.slotId, 1) : null}
               surRoundsCycle={
                 s.ajout && seance.tabata
                   ? () => {
@@ -3833,13 +3903,25 @@ function VueSeance({
           );
         })}
 
-        {/* ajouter un exercice à la volée (ne modifie pas le programme) */}
-        <button
-          onClick={() => setAjoutOuvert(true)}
-          className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-        >
-          <Plus size={17} className="text-accent transi" /> Ajouter un exercice
-        </button>
+        {/* ajouter un exercice à la volée / remettre l'ordre du programme
+            (ni l'un ni l'autre ne modifie le programme) */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAjoutOuvert(true)}
+            className="flex-1 h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+          >
+            <Plus size={17} className="text-accent transi" /> Ajouter un exercice
+          </button>
+          {ordreModifie && (
+            <button
+              onClick={surReinitOrdre}
+              aria-label="Remettre l’ordre du programme"
+              className="h-12 px-4 rounded-2xl bg-carte border border-ligne text-brume text-xs font-bold shrink-0 active:scale-95 transi"
+            >
+              Ordre d’origine
+            </button>
+          )}
+        </div>
 
         {/* cardio (pas en tabata : le tabata EST le cardio) */}
         {seance.cardio && (
@@ -4360,7 +4442,7 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 function CarteExo({
   numero, total, exo, nomOriginal, estAjout, variantes = [], profil, coche, seriesFaites, poids,
   dernierePerf, tabata, rounds, surCoche, surSeries, surRoue, surRepos, surVariante, surTabata,
-  surRetirer, surRoundsCycle,
+  surRetirer, surRoundsCycle, surMonter, surDescendre,
 }) {
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const aVariantes = variantes.length > 1;
@@ -4458,6 +4540,28 @@ function CarteExo({
         </div>
         <div className="flex flex-col items-center gap-2 shrink-0">
           <CaseCoche coche={coche} surClic={surCoche} />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={surMonter || undefined}
+              disabled={!surMonter}
+              aria-label={`Monter ${exo.nom} dans la séance`}
+              className={`h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center transi ${
+                surMonter ? "active:scale-95" : "opacity-30"
+              }`}
+            >
+              <ChevronUp size={16} className="text-brume" />
+            </button>
+            <button
+              onClick={surDescendre || undefined}
+              disabled={!surDescendre}
+              aria-label={`Descendre ${exo.nom} dans la séance`}
+              className={`h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center transi ${
+                surDescendre ? "active:scale-95" : "opacity-30"
+              }`}
+            >
+              <ChevronDown size={16} className="text-brume" />
+            </button>
+          </div>
           {surRetirer && (
             <button
               onClick={surRetirer}
