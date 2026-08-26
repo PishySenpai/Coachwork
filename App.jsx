@@ -198,7 +198,7 @@ async function tirerDepuisServeur() {
      nous attribue, on y range les données locales existantes, et on reprend
      ses horodatages — sans rien demander à l'utilisateur */
   if (!espaceApp && j.espace) {
-    espaceApp = { id: j.espace, nom: j.nom || j.espace };
+    espaceApp = { id: j.espace, nom: j.nom || j.espace, protege: j.protege !== false };
     await ecrireBrut("app:espace", espaceApp);
     await migrerVersEspace(espaceApp.id);
     const h = await lire("app:horodatages");
@@ -1712,7 +1712,8 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
   const [nom, setNom] = useState(nomInitial || "");
   const [code, setCode] = useState("");
   const creation = mode === "creer";
-  const pret = nom.trim().length > 0 && code.trim().length >= (creation ? 4 : 1);
+  /* un espace pas encore protégé s'ouvre sans code : on n'exige rien pour rejoindre */
+  const pret = nom.trim().length > 0 && (!creation || code.trim().length >= 4);
 
   return (
     <div data-accent="lime" className="coquille bg-fond text-encre font-jakarta flex items-center justify-center px-6">
@@ -1929,7 +1930,7 @@ export default function App() {
       return;
     }
 
-    const infos = { id: corps.id, nom: corps.nom };
+    const infos = { id: corps.id, nom: corps.nom, protege: corps.protege !== false };
     espaceApp = infos;
     codeApp = code;
     await ecrireBrut("app:espace", infos);
@@ -1943,6 +1944,34 @@ export default function App() {
     setSyncEtat("ok");
     setVerrou(null);
     await afficherDonnees();
+  }
+
+  /* poser ou remplacer le code de l'espace, sans passer par Vercel */
+  async function definirCodeEspace(nouveauCode) {
+    if (!espaceApp) return { erreur: "aucun espace ouvert" };
+    let rep, corps = {};
+    try {
+      rep = await fetch(API_ESPACE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "definirCode",
+          nom: espaceApp.id,
+          code: codeApp || "",
+          nouveauCode,
+        }),
+      });
+      corps = await rep.json();
+    } catch (e) {
+      return { erreur: "Serveur injoignable — réessaie dans un instant." };
+    }
+    if (!rep.ok) return { erreur: corps.erreur || "Impossible d’enregistrer le code." };
+    codeApp = nouveauCode;
+    espaceApp = { ...espaceApp, protege: true };
+    await ecrireBrut("app:code", nouveauCode);
+    await ecrireBrut("app:espace", espaceApp);
+    setEspace(espaceApp);
+    return { ok: true };
   }
 
   /* quitter l'espace : on n'efface que ce qui identifie l'appareil */
@@ -2591,11 +2620,13 @@ export default function App() {
                 programmes={programmes}
                 progActuel={progActuel}
                 syncEtat={syncEtat}
+                espace={espace}
                 surOuvrir={setOuverte}
                 surMode={choisirMode}
                 surMesure={noterMesure}
                 surMajProfil={(patch) => majProfil(profil, patch)}
                 surSupprimerProfil={() => supprimerProfil(profil)}
+                surDefinirCode={definirCodeEspace}
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
               />
@@ -2722,9 +2753,86 @@ export default function App() {
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
 
+/* Espace encore accessible à qui a l'URL : on propose de poser un code */
+function CarteProtection({ surDefinirCode }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [code, setCode] = useState("");
+  const [erreur, setErreur] = useState(null);
+  const [occupe, setOccupe] = useState(false);
+
+  async function valider(e) {
+    e.preventDefault();
+    if (code.trim().length < 4 || occupe) return;
+    setOccupe(true);
+    setErreur(null);
+    const r = await surDefinirCode(code.trim());
+    setOccupe(false);
+    if (r && r.erreur) setErreur(r.erreur);
+    else { setOuvert(false); setCode(""); }
+  }
+
+  return (
+    <section className="rounded-2xl bg-carte border bordure-accent-douce p-4">
+      <div className="flex gap-3">
+        <ShieldCheck size={20} className="text-accent shrink-0 mt-0.5 transi" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs leading-relaxed text-brume">
+            <strong className="text-douce">Cet espace n’a pas encore de code.</strong> N’importe
+            qui connaissant l’adresse peut voir et modifier vos séances. Pose un code : il te sera
+            demandé une seule fois par téléphone.
+          </p>
+          {ouvert ? (
+            <form onSubmit={valider} className="mt-3">
+              <input
+                type="password"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Nouveau code (4 caractères min.)"
+                autoComplete="off"
+                className="w-full rounded-xl bg-carte2 px-3 text-center font-extrabold outline-none placeholder-slate-600"
+                style={{ height: 48 }}
+                aria-label="Nouveau code de l’espace"
+              />
+              {erreur && <p className="text-rouge text-xs mt-2">{erreur}</p>}
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setOuvert(false); setErreur(null); }}
+                  className="h-11 px-4 rounded-xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={code.trim().length < 4 || occupe}
+                  className={`flex-1 h-11 rounded-xl font-extrabold text-sm transi ${
+                    code.trim().length < 4 || occupe
+                      ? "bg-carte2 text-brume"
+                      : "bg-accent text-accent-ink active:scale-98"
+                  }`}
+                >
+                  {occupe ? "Enregistrement…" : "Protéger l’espace"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => setOuvert(true)}
+              className="mt-3 h-11 w-full rounded-xl bg-accent text-accent-ink font-extrabold text-sm active:scale-98 transi"
+            >
+              Protéger par un code
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function VueSemaine({
-  profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat,
-  surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surCreer, surEditer,
+  profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat, espace,
+  surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surDefinirCode,
+  surCreer, surEditer,
 }) {
   const p = profilObj;
   const nom = nomAffiche(donnees, p);
@@ -3002,14 +3110,19 @@ function VueSemaine({
         </section>
       )}
 
+      {/* espace encore ouvert à tous : proposer de poser un code */}
+      {syncEtat === "ok" && espace && espace.protege === false && (
+        <CarteProtection surDefinirCode={surDefinirCode} />
+      )}
+
       <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
         {syncEtat === "ok" ? (
           <>
             <Cloud size={20} className="text-accent shrink-0 mt-0.5 transi" />
             <p className="text-xs leading-relaxed text-brume">
-              <strong className="text-douce">Synchro activée.</strong> Vos deux téléphones voient
-              les mêmes données : séances validées, charges, programmes. Tu peux suivre le
-              programme de Valérie depuis ici, et inversement.
+              <strong className="text-douce">Synchro activée.</strong> Vos téléphones voient les
+              mêmes données : séances validées, charges, programmes — espace
+              {espace ? ` « ${espace.nom} »` : ""}.
             </p>
           </>
         ) : (

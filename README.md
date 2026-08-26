@@ -43,10 +43,14 @@ Le choix est mémorisé sur l'appareil ; le bouton nuage en haut à droite perme
 
 ### Espace d'origine (migration)
 
-Si `COACHWORK_CODE` est défini dans les variables Vercel, l'app crée automatiquement
-l'espace **Principal** avec ce code et les données déjà en place. Les téléphones déjà
-installés l'adoptent tout seuls au prochain lancement : rien à ressaisir, rien à perdre.
-Pour le rejoindre depuis un nouvel appareil : nom `Principal` + ce code.
+Au premier lancement, l'app crée automatiquement l'espace **Principal** à partir des données
+déjà en place. Les téléphones déjà installés l'adoptent tout seuls : rien à ressaisir.
+
+- Si la variable `COACHWORK_CODE` existe, cet espace prend ce code.
+- Sinon il reste **sans code** (comportement historique) et l'app propose, dans *Ma semaine*,
+  un bouton **Protéger par un code** pour en poser un sans passer par Vercel.
+
+Le code d'un espace se change ensuite depuis l'app (l'ancien code est exigé).
 
 ## Un ami veut utiliser l'app ?
 

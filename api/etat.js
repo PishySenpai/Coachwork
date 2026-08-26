@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       for (let i = 0; i < plat.length; i += 2) {
         try { etat[plat[i]] = JSON.parse(plat[i + 1]); } catch (e) {}
       }
-      return res.status(200).json({ sync: true, espace: acces.id, nom: acces.espace.nom, etat });
+      return res.status(200).json({ sync: true, espace: acces.id, nom: acces.espace.nom, protege: !acces.espace.sansCode, etat });
     }
 
     if (req.method === "POST") {

@@ -52,7 +52,10 @@ export async function hacherCode(code) {
 }
 
 export async function codeValide(code, espace) {
-  if (!espace || !espace.sel || !espace.hash) return false;
+  if (!espace) return false;
+  /* espace jamais protégé (cas historique) : accès libre, comme avant */
+  if (espace.sansCode) return true;
+  if (!espace.sel || !espace.hash) return false;
   const candidat = await derive(code, espace.sel);
   const a = Buffer.from(candidat, "hex");
   const b = Buffer.from(espace.hash, "hex");
@@ -68,14 +71,28 @@ export async function lireEspace(id) {
       return null;
     }
   }
-  /* premier passage : on adopte l'espace d'origine (données déjà en place) */
-  if (id === ESPACE_LEGACY && process.env.COACHWORK_CODE) {
-    const { sel, hash } = await hacherCode(process.env.COACHWORK_CODE);
-    const espace = { nom: "Principal", cle: CLE_LEGACY, sel, hash, cree: Date.now() };
+  /* Premier passage : on adopte l'espace d'origine, avec ses données déjà en
+     place. S'il n'y avait pas de code jusqu'ici, on n'en invente pas — l'app
+     reste accessible comme avant, et le code se pose depuis l'app. */
+  if (id === ESPACE_LEGACY) {
+    const codeEnv = process.env.COACHWORK_CODE;
+    const base = { nom: "Principal", cle: CLE_LEGACY, cree: Date.now() };
+    const espace = codeEnv
+      ? { ...base, ...(await hacherCode(codeEnv)) }
+      : { ...base, sansCode: true };
     await redis(["HSET", REGISTRE, id, JSON.stringify(espace)]);
     return espace;
   }
   return null;
+}
+
+/* Pose ou remplace le code d'un espace (le code actuel a déjà été vérifié) */
+export async function definirCode(id, espace, nouveauCode) {
+  const { sel, hash } = await hacherCode(nouveauCode);
+  const maj = { ...espace, sel, hash };
+  delete maj.sansCode;
+  await redis(["HSET", REGISTRE, id, JSON.stringify(maj)]);
+  return maj;
 }
 
 export async function creerEspace(nom, code) {
