@@ -129,9 +129,9 @@ async function migrerVersEspace(id) {
 const API_SYNC = "/api/etat";
 const API_ESPACE = "/api/espace";
 /* Identifient l'appareil : hors espace, jamais synchronisées */
-const CLES_APPAREIL = new Set(["app:code", "app:espace"]);
+const CLES_APPAREIL = new Set(["app:code", "app:espace", "app:espacesConnus"]);
 /* Rangées dans l'espace mais propres à l'appareil : jamais synchronisées */
-const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code", "app:espace"]);
+const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code", "app:espace", "app:espacesConnus"]);
 
 let horodatages = {};
 let syncDisponible = false;
@@ -1856,6 +1856,8 @@ export default function App() {
   const [fete, setFete] = useState(null); // {titre, deja, total}
   const [verrou, setVerrou] = useState(null); // null | {erreur?, occupe?}
   const [espace, setEspace] = useState(null); // {id, nom} de l’espace ouvert
+  const [espacesConnus, setEspacesConnus] = useState([]); // ouverts sur cet appareil
+  const [listeEspaces, setListeEspaces] = useState(false); // panneau caché (triple tap)
   const vivantRef = useRef(true);
 
   async function afficherDonnees() {
@@ -1890,6 +1892,9 @@ export default function App() {
       }
       setSyncEtat(statut === "ok" || statut === "maj" ? "ok" : "off");
       setEspace(espaceApp);
+      setEspacesConnus((await lire("app:espacesConnus")) || []);
+      /* espace adopté automatiquement (migration) : on le retient aussi */
+      if (espaceApp) await memoriserEspace(espaceApp, codeApp || "");
       await afficherDonnees();
     })();
     return () => { vivantRef.current = false; };
@@ -1941,9 +1946,40 @@ export default function App() {
       await tirerDepuisServeur();
     } catch (e) {}
     setEspace(infos);
+    await memoriserEspace(infos, code);
     setSyncEtat("ok");
     setVerrou(null);
     await afficherDonnees();
+  }
+
+  /* trois appuis rapprochés sur l'haltère : panneau des espaces */
+  const tapsHaltere = useRef({ n: 0, t: 0 });
+  function tapHaltere() {
+    const maintenant = Date.now();
+    const etat = tapsHaltere.current;
+    etat.n = maintenant - etat.t < 600 ? etat.n + 1 : 1;
+    etat.t = maintenant;
+    if (etat.n >= 3) {
+      etat.n = 0;
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+      setListeEspaces(true);
+    }
+  }
+
+  /* Espaces déjà ouverts sur ce téléphone : liste locale, jamais envoyée au
+     serveur — elle sert au raccourci de bascule (triple tap sur l'haltère). */
+  async function memoriserEspace(infos, code) {
+    const liste = await lire("app:espacesConnus");
+    const autres = (Array.isArray(liste) ? liste : []).filter((e) => e.id !== infos.id);
+    const maj = [{ ...infos, code }, ...autres].slice(0, 8);
+    await ecrireBrut("app:espacesConnus", maj);
+    setEspacesConnus(maj);
+  }
+
+  async function oublierEspace(id) {
+    const autres = espacesConnus.filter((e) => e.id !== id);
+    await ecrireBrut("app:espacesConnus", autres);
+    setEspacesConnus(autres);
   }
 
   /* poser ou remplacer le code de l'espace, sans passer par Vercel */
@@ -2485,9 +2521,14 @@ export default function App() {
         {/* ---------- en-tête ---------- */}
         <header className="pt-5 pb-4">
           <div className="flex items-center gap-2.5">
-            <span className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center transi">
+            {/* raccourci discret : trois appuis ouvrent la liste des espaces */}
+            <button
+              onClick={tapHaltere}
+              aria-label="Coachwork"
+              className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center shrink-0 transi"
+            >
               <Dumbbell size={20} className="text-accent-ink" strokeWidth={2.5} />
-            </span>
+            </button>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-extrabold leading-none tracking-tight">Coachwork</h1>
               <p className="text-brume text-xs mt-0.5 truncate">
@@ -2712,6 +2753,17 @@ export default function App() {
       )}
 
       {/* ---------- fête de fin de séance ---------- */}
+      {listeEspaces && (
+        <FeuilleEspaces
+          espaces={espacesConnus}
+          actuel={espace}
+          surBasculer={(e) => { setListeEspaces(false); tenterEspace(e.id, e.code || "", false); }}
+          surOublier={oublierEspace}
+          surAutre={() => { setListeEspaces(false); quitterEspace(); }}
+          surFermer={() => setListeEspaces(false)}
+        />
+      )}
+
       {fete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 voile" onClick={() => setFete(null)}>
           <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-8 text-center surgit" onClick={(e) => e.stopPropagation()}>
@@ -2752,6 +2804,97 @@ export default function App() {
 /* ------------------------------------------------------------------ */
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
+
+/* Panneau caché (trois appuis sur l'haltère) : bascule entre les espaces déjà
+   ouverts sur ce téléphone. Rien n'est demandé au serveur pour l'afficher. */
+function FeuilleEspaces({ espaces, actuel, surBasculer, surOublier, surAutre, surFermer }) {
+  useVerrouScroll();
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base leading-tight">Mes espaces</h3>
+            <p className="text-brume text-xs mt-0.5">Ceux déjà ouverts sur ce téléphone</p>
+          </div>
+          <button
+            onClick={surFermer}
+            aria-label="Fermer"
+            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
+          >
+            <X size={18} className="text-brume" />
+          </button>
+        </div>
+
+        {espaces.length === 0 ? (
+          <p className="text-brume text-sm py-3 leading-relaxed">
+            Aucun espace mémorisé pour l’instant. Ceux que tu ouvriras apparaîtront ici.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto defile">
+            {espaces.map((e) => {
+              const ici = actuel && actuel.id === e.id;
+              return (
+                <div
+                  key={e.id}
+                  className={`rounded-2xl border flex items-stretch transi ${
+                    ici ? "bg-carte2 bordure-accent-douce" : "bg-carte2 border-ligne"
+                  }`}
+                >
+                  <button
+                    onClick={() => !ici && surBasculer(e)}
+                    className="flex-1 min-w-0 p-3 flex items-center gap-3 text-left active:scale-98 transi"
+                  >
+                    <span
+                      className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transi ${
+                        ici ? "bg-accent" : "bg-carte"
+                      }`}
+                    >
+                      {ici ? (
+                        <Check size={17} strokeWidth={3.5} className="text-accent-ink" />
+                      ) : (
+                        <Dumbbell size={16} className="text-brume" />
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="font-bold text-sm block truncate">{e.nom}</span>
+                      <span className="text-brume text-xs block">
+                        {ici ? "Espace actuel" : e.protege === false ? "Sans code" : "Protégé"}
+                      </span>
+                    </span>
+                  </button>
+                  {!ici && (
+                    <button
+                      onClick={() => surOublier(e.id)}
+                      aria-label={`Oublier ${e.nom}`}
+                      className="px-3 flex items-center justify-center shrink-0 active:scale-95 transi"
+                    >
+                      <Trash2 size={15} className="text-brume" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button
+          onClick={surAutre}
+          className="mt-3 w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+        >
+          <Plus size={17} className="text-accent transi" /> Ouvrir un autre espace
+        </button>
+        <p className="text-brume text-xs mt-3 leading-relaxed">
+          Cette liste ne quitte jamais ce téléphone — les espaces des autres n’y figurent pas.
+        </p>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 /* Espace encore accessible à qui a l'URL : on propose de poser un code */
 function CarteProtection({ surDefinirCode }) {

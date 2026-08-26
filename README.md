@@ -13,6 +13,7 @@ npx http-server dist -c-1
 - Source unique : `App.jsx` (React, export par défaut).
 - `fetch-fonts.mjs` régénère `fonts.css` (Plus Jakarta Sans en data URI) si besoin.
 - Persistance : `window.storage` → repli IndexedDB → mémoire. Jamais localStorage.
+- `node serveur-e2e.mjs` sert `dist/` **et** les fonctions `api/` avec un Redis simulé (port 4531) : pratique pour tester la synchro, les espaces et les codes sans rien déployer.
 
 ## Déploiement
 
