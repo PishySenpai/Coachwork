@@ -9,12 +9,36 @@
   --accent-soft: rgba(163, 230, 53, 0.13);
   --accent-bordure: rgba(163, 230, 53, 0.35);
 }
-[data-profil="valerie"] {
+[data-accent="corail"] {
   --accent: #fb7185;
   --accent-ink: #2b070d;
   --accent-soft: rgba(251, 113, 133, 0.14);
   --accent-bordure: rgba(251, 113, 133, 0.4);
 }
+[data-accent="azur"] {
+  --accent: #38bdf8;
+  --accent-ink: #04202e;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --accent-bordure: rgba(56, 189, 248, 0.4);
+}
+[data-accent="turquoise"] {
+  --accent: #2dd4bf;
+  --accent-ink: #032420;
+  --accent-soft: rgba(45, 212, 191, 0.14);
+  --accent-bordure: rgba(45, 212, 191, 0.4);
+}
+[data-accent="violet"] {
+  --accent: #c084fc;
+  --accent-ink: #240b38;
+  --accent-soft: rgba(192, 132, 252, 0.15);
+  --accent-bordure: rgba(192, 132, 252, 0.42);
+}
+/* pastilles de choix de couleur (aperçu indépendant de l'accent actif) */
+.pastille-lime { background-color: #a3e635; }
+.pastille-corail { background-color: #fb7185; }
+.pastille-azur { background-color: #38bdf8; }
+.pastille-turquoise { background-color: #2dd4bf; }
+.pastille-violet { background-color: #c084fc; }
 
 html {
   background: #0b0f14;

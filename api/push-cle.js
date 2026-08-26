@@ -14,7 +14,8 @@ export async function clesVapid() {
 }
 
 export default async function handler(req, res) {
-  if (garde(req, res)) return;
+  const acces = await garde(req, res);
+  if (!acces) return;
   try {
     const { publique } = await clesVapid();
     return res.status(200).json({ cle: publique });

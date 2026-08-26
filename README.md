@@ -28,26 +28,34 @@ Par défaut les données restent sur chaque appareil. Pour que les deux téléph
 
 Notes : synchro « dernier écrit gagne » clé par clé, rafraîchie au lancement, au retour sur l'app et toutes les 45 s.
 
-## Code d'accès (recommandé si la synchro est activée)
+## Espaces et code d'accès
 
-Pour protéger les données maintenant que l'app est en ligne :
+Un **espace** = un groupe de personnes qui s'entraînent ensemble (un duo, une bande de potes).
+Chaque espace a son nom, son code, ses profils, ses programmes et son historique.
+**Rien n'est partagé entre deux espaces**, ni sur le serveur, ni sur le téléphone.
 
-1. Dashboard Vercel → projet → **Settings** → **Environment Variables**.
-2. Ajouter `COACHWORK_CODE` = le code de votre choix (ex. `2609`), tous les environnements.
-3. **Redeploy**.
+Au premier lancement, l'app demande de **rejoindre** un espace (nom + code) ou d'en **créer** un.
+Le choix est mémorisé sur l'appareil ; le bouton nuage en haut à droite permet d'en changer.
 
-Au prochain lancement, l'app demande le code une seule fois par appareil (il reste mémorisé sur le téléphone, jamais synchronisé). L'API refuse toute lecture/écriture sans ce code : sans lui, un visiteur qui tombe sur l'URL ne voit qu'un écran de verrouillage. Pour changer le code : modifier la variable puis Redeploy — les téléphones redemanderont le nouveau code.
+- Les codes ne sont **jamais stockés en clair** : seul un hachage scrypt salé est conservé.
+- Après 10 essais ratés, l'espace se ferme pendant 15 minutes.
+- Un code doit faire au moins 4 caractères.
 
-Sans `COACHWORK_CODE`, l'app fonctionne comme avant (pas d'écran de code).
+### Espace d'origine (migration)
+
+Si `COACHWORK_CODE` est défini dans les variables Vercel, l'app crée automatiquement
+l'espace **Principal** avec ce code et les données déjà en place. Les téléphones déjà
+installés l'adoptent tout seuls au prochain lancement : rien à ressaisir, rien à perdre.
+Pour le rejoindre depuis un nouvel appareil : nom `Principal` + ce code.
 
 ## Un ami veut utiliser l'app ?
 
-Chaque « duo » a son propre déploiement, ses propres données, son propre code :
+Il ouvre **votre URL**, crée son propre espace (nom + code de son choix) et c'est tout.
+Ses données sont totalement séparées des vôtres — plus besoin de forker ni de déployer.
 
-1. L'ami se crée un compte GitHub + Vercel (gratuits), **fork** ce repo (bouton Fork sur GitHub), puis l'importe sur [vercel.com/new](https://vercel.com/new) — aucun réglage à changer.
-2. En option : sa propre base Upstash (synchro) et son propre `COACHWORK_CODE`, comme ci-dessus.
-3. Dans l'app, les prénoms se changent directement dans **Mes repères** (champ Prénom, un par profil) — pas besoin de toucher au code.
+Dans son espace, il compose ses profils librement (bouton **+ Profil**) : prénom, couleur,
+et surtout un **niveau de charges** dans *Mes repères* — Standard, ou Tout en douceur
+(charges plus légères, articulations ménagées). Ce niveau pilote les charges conseillées
+affichées sur chaque exercice.
 
-À savoir : les charges de départ conseillées et certains conseils (reprise à 54 ans…) ont été écrits pour Esteban & Valérie ; ils restent de bons ordres de grandeur pour des débutants, mais l'ami peut les ajuster dans `App.jsx` (dictionnaire `EXOS`) s'il veut personnaliser.
-
-Ne partagez pas votre propre URL + code avec d'autres : tout le monde y écrirait dans les deux mêmes profils.
+Ne partagez le code d'un espace qu'avec les gens qui doivent y écrire.

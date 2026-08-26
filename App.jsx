@@ -49,36 +49,75 @@ function idbEcrire(cle, val) {
   );
 }
 
+function idbCles() {
+  return ouvrirIDB().then(
+    (db) =>
+      new Promise((res, rej) => {
+        const r = db.transaction("kv", "readonly").objectStore("kv").getAllKeys();
+        r.onsuccess = () => res(r.result || []);
+        r.onerror = () => rej(r.error);
+      })
+  );
+}
+
+/* Les données sont rangées par espace sur l'appareil : deux espaces ouverts
+   sur le même téléphone ne se mélangent jamais. Seules les clés qui
+   identifient l'appareil restent hors de tout espace. */
+function clePhysique(cle) {
+  if (CLES_APPAREIL.has(cle)) return cle;
+  return `${(espaceApp && espaceApp.id) || "local"}::${cle}`;
+}
+
 async function lire(cle) {
+  const k = clePhysique(cle);
   try {
     const s = typeof window !== "undefined" ? window.storage : null;
     const fn = s && (s.getItem || s.get);
     if (typeof fn === "function") {
-      const r = await fn.call(s, cle);
+      const r = await fn.call(s, k);
       const v = r != null && typeof r === "object" && "value" in r ? r.value : r;
       return v == null ? null : JSON.parse(v);
     }
   } catch (e) {}
   try {
-    const v = await idbLire(cle);
+    const v = await idbLire(k);
     return v == null ? null : JSON.parse(v);
   } catch (e) {}
-  return mem.has(cle) ? JSON.parse(mem.get(cle)) : null;
+  return mem.has(k) ? JSON.parse(mem.get(k)) : null;
 }
 
 async function ecrireBrut(cle, valeur) {
+  const k = clePhysique(cle);
   const v = JSON.stringify(valeur);
-  mem.set(cle, v);
+  mem.set(k, v);
   try {
     const s = typeof window !== "undefined" ? window.storage : null;
     const fn = s && (s.setItem || s.set);
     if (typeof fn === "function") {
-      await fn.call(s, cle, v);
+      await fn.call(s, k, v);
       return;
     }
   } catch (e) {}
   try {
-    await idbEcrire(cle, v);
+    await idbEcrire(k, v);
+  } catch (e) {}
+}
+
+/* Reprise des données d'avant les espaces : on les range dans l'espace
+   qui vient d'être adopté, une seule fois. */
+async function migrerVersEspace(id) {
+  try {
+    const cles = await idbCles();
+    const aMigrer = cles.filter(
+      (k) => typeof k === "string" && !k.includes("::") && !CLES_APPAREIL.has(k)
+    );
+    if (!aMigrer.length) return;
+    for (const k of aMigrer) {
+      const cible = `${id}::${k}`;
+      if (cles.includes(cible)) continue;
+      const v = await idbLire(k);
+      if (v != null) await idbEcrire(cible, v);
+    }
   } catch (e) {}
 }
 
@@ -88,12 +127,16 @@ async function ecrireBrut(cle, valeur) {
 /* ------------------------------------------------------------------ */
 
 const API_SYNC = "/api/etat";
-/* Clés propres à l'appareil : jamais synchronisées */
-const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code"]);
+const API_ESPACE = "/api/espace";
+/* Identifient l'appareil : hors espace, jamais synchronisées */
+const CLES_APPAREIL = new Set(["app:code", "app:espace"]);
+/* Rangées dans l'espace mais propres à l'appareil : jamais synchronisées */
+const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code", "app:espace"]);
 
 let horodatages = {};
 let syncDisponible = false;
 let codeApp = null; // code d'accès, gardé sur l'appareil uniquement
+let espaceApp = null; // {id, nom} de l'espace ouvert sur cet appareil
 const enAttente = new Map();
 let minuteriePoussee = null;
 
@@ -101,6 +144,7 @@ function entetesSync(avecJson) {
   const h = {};
   if (avecJson) h["Content-Type"] = "application/json";
   if (codeApp) h["X-Code"] = codeApp;
+  if (espaceApp && espaceApp.id) h["X-Espace"] = espaceApp.id;
   return h;
 }
 
@@ -150,6 +194,16 @@ async function tirerDepuisServeur() {
   const j = await r.json();
   if (!j.sync) return "off";
   syncDisponible = true;
+  /* app déjà installée avant les espaces : on adopte celui que le serveur
+     nous attribue, on y range les données locales existantes, et on reprend
+     ses horodatages — sans rien demander à l'utilisateur */
+  if (!espaceApp && j.espace) {
+    espaceApp = { id: j.espace, nom: j.nom || j.espace };
+    await ecrireBrut("app:espace", espaceApp);
+    await migrerVersEspace(espaceApp.id);
+    const h = await lire("app:horodatages");
+    if (h) horodatages = h;
+  }
   let adopte = false;
   const aPousser = [];
   const distant = j.etat || {};
@@ -320,18 +374,36 @@ const FORMAT_MINI = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "s
 /* Profils & mesures                                                   */
 /* ------------------------------------------------------------------ */
 
-const PROFILS = {
-  esteban: { nom: "Esteban", initiale: "E", detail: "Reprise en main" },
-  valerie: { nom: "Valérie", initiale: "V", detail: "Reprise en douceur" },
+/* Niveau = jeu de charges conseillées d'un profil (les exercices donnent
+   leurs repères pour ces deux niveaux, plus pour des prénoms en dur) */
+const NIVEAUX = {
+  standard: { nom: "Standard", detail: "Charges classiques, progression régulière" },
+  doux: { nom: "Tout en douceur", detail: "Charges légères, articulations ménagées" },
 };
+
+const ACCENTS = [
+  { id: "lime", nom: "Lime" },
+  { id: "corail", nom: "Corail" },
+  { id: "azur", nom: "Azur" },
+  { id: "turquoise", nom: "Turquoise" },
+  { id: "violet", nom: "Violet" },
+];
+
+/* Profils par défaut : le duo d'origine (mêmes identifiants qu'avant,
+   donc les données déjà enregistrées restent en place) */
+const PROFILS_DEFAUT = [
+  { id: "esteban", nom: "Esteban", niveau: "standard", accent: "lime", detail: "Reprise en main" },
+  { id: "valerie", nom: "Valérie", niveau: "doux", accent: "corail", detail: "Reprise en douceur" },
+];
 
 const MESURES_DEFAUT = {
   esteban: { nom: "Esteban", age: "29", taille: "170", poids: "79" },
   valerie: { nom: "Valérie", age: "54", taille: "154", poids: "65" },
 };
 
-function nomAffiche(donneesProfil, id) {
-  return ((donneesProfil.mesures.nom || "").trim()) || PROFILS[id].nom;
+function nomAffiche(donneesProfil, prof) {
+  const saisi = donneesProfil && donneesProfil.mesures ? (donneesProfil.mesures.nom || "").trim() : "";
+  return saisi || (prof && prof.nom) || "Profil";
 }
 
 /* ------------------------------------------------------------------ */
@@ -347,7 +419,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 40–60 kg", valerie: "Départ conseillé : 15–25 kg" },
+    charge: { standard: "Départ conseillé : 40–60 kg", doux: "Départ conseillé : 15–25 kg" },
     variante: "Poids libres : goblet squat avec un haltère.",
     conseil:
       "Pieds à largeur d’épaules, descends jusqu’à 90° et pousse sans jamais verrouiller les genoux.",
@@ -359,7 +431,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 90,
-    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–8 kg" },
+    charge: { standard: "Haltère de 10–16 kg", doux: "Haltère de 4–8 kg" },
     variante: "Genoux sensibles ce jour-là ? Repasse sur la presse à cuisses.",
     conseil: "Haltère serré contre la poitrine, dos droit, talons au sol. Descends comme pour t’asseoir.",
   },
@@ -370,7 +442,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 90,
-    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
+    charge: { standard: "2 haltères de 10–14 kg", doux: "2 haltères de 4–6 kg" },
     variante: "Ou leg curl si le geste n’est pas encore à l’aise.",
     conseil:
       "Pousse les hanches vers l’arrière, dos plat, haltères qui glissent le long des cuisses. Tu dois sentir l’arrière des jambes, jamais le bas du dos.",
@@ -382,7 +454,7 @@ const EXOS = {
     series: 2,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 25–35 kg", valerie: "Départ conseillé : 10–15 kg" },
+    charge: { standard: "Départ conseillé : 25–35 kg", doux: "Départ conseillé : 10–15 kg" },
     variante: "Version allongée selon les machines de la salle.",
     conseil: "Fléchis en 1 seconde, retiens la remontée en 3 secondes. Les ischios adorent la lenteur.",
   },
@@ -393,7 +465,7 @@ const EXOS = {
     series: 2,
     reps: "15",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
+    charge: { standard: "Départ conseillé : 20–30 kg", doux: "Départ conseillé : 10–15 kg" },
     variante: "Réglage : le coussin repose juste au-dessus des chevilles.",
     conseil: "Monte en 1 seconde, redescends en 3. Léger et propre plutôt que lourd et saccadé.",
   },
@@ -405,8 +477,8 @@ const EXOS = {
     reps: "15",
     repos: 60,
     charge: {
-      esteban: "Haltère ou disque de 10–20 kg sur les hanches",
-      valerie: "Poids du corps, puis 5–10 kg quand c’est facile",
+      standard: "Haltère ou disque de 10–20 kg sur les hanches",
+      doux: "Poids du corps, puis 5–10 kg quand c’est facile",
     },
     variante: "Machine hip thrust si ta salle en a une.",
     conseil:
@@ -419,7 +491,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 7,5–12,5 kg" },
+    charge: { standard: "Départ conseillé : 20–30 kg", doux: "Départ conseillé : 7,5–12,5 kg" },
     variante: "Poids libres : développé haltères sur banc.",
     conseil: "Omoplates serrées contre le dossier, pousse en expirant, redescends en 2 secondes.",
   },
@@ -430,7 +502,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
+    charge: { standard: "Départ conseillé : 15–20 kg", doux: "Départ conseillé : 5–10 kg" },
     variante: "Poids libres : développé avec deux haltères légers.",
     conseil: "Ne hausse pas les épaules vers les oreilles ; le mouvement reste fluide, sans à-coups.",
   },
@@ -443,8 +515,8 @@ const EXOS = {
     repos: 90,
     sansCharge: true,
     charge: {
-      esteban: "Mains sur un banc bas, ou au sol",
-      valerie: "Mains sur une barre haute (cadre guidé)",
+      standard: "Mains sur un banc bas, ou au sol",
+      doux: "Mains sur une barre haute (cadre guidé)",
     },
     variante: "Ou développé poitrine avec haltères.",
     conseil:
@@ -457,7 +529,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    charge: { standard: "Départ conseillé : 30–40 kg", doux: "Départ conseillé : 15–20 kg" },
     variante: "Machine à tractions assistées si disponible.",
     conseil: "Tire la barre vers le haut de la poitrine, coudes vers le bas — pas derrière la nuque.",
   },
@@ -468,7 +540,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 30–40 kg", valerie: "Départ conseillé : 15–20 kg" },
+    charge: { standard: "Départ conseillé : 30–40 kg", doux: "Départ conseillé : 15–20 kg" },
     variante: "Ou tirage horizontal à la poulie basse.",
     conseil: "Poitrine contre le support, tire les coudes vers l’arrière et serre les omoplates 1 seconde.",
   },
@@ -479,7 +551,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 90,
-    charge: { esteban: "Départ conseillé : 25–35 kg", valerie: "Départ conseillé : 12–17 kg" },
+    charge: { standard: "Départ conseillé : 25–35 kg", doux: "Départ conseillé : 12–17 kg" },
     variante: "Ou rowing un bras avec haltère, genou sur le banc.",
     conseil: "Buste droit et stable, tire la poignée vers le nombril sans te balancer.",
   },
@@ -491,7 +563,7 @@ const EXOS = {
     reps: "20–40 s",
     repos: 60,
     sansCharge: true,
-    charge: { esteban: "Sur les avant-bras, corps aligné", valerie: "Sur les genoux au départ — parfait aussi" },
+    charge: { standard: "Sur les avant-bras, corps aligné", doux: "Sur les genoux au départ — parfait aussi" },
     variante: "Trop facile ? Décolle un pied 5 s de chaque côté.",
     conseil: "Serre les fessiers et le ventre, ne laisse pas le bas du dos se creuser.",
   },
@@ -503,7 +575,7 @@ const EXOS = {
     reps: "8 / côté",
     repos: 60,
     sansCharge: true,
-    charge: { esteban: "Bras et jambe opposés tendus", valerie: "Amplitude réduite au départ" },
+    charge: { standard: "Bras et jambe opposés tendus", doux: "Amplitude réduite au départ" },
     variante: "Trop facile ? Ralentis encore le mouvement.",
     conseil: "Bas du dos plaqué au sol du début à la fin. Souffle en allongeant bras et jambe.",
   },
@@ -515,7 +587,7 @@ const EXOS = {
     reps: "15–25 s / côté",
     repos: 60,
     sansCharge: true,
-    charge: { esteban: "Sur l’avant-bras, pieds empilés", valerie: "Genoux posés — version parfaite pour démarrer" },
+    charge: { standard: "Sur l’avant-bras, pieds empilés", doux: "Genoux posés — version parfaite pour démarrer" },
     variante: "Trop facile ? Lève le bras libre vers le plafond.",
     conseil: "Hanches hautes, corps en ligne droite des épaules aux pieds (ou aux genoux).",
   },
@@ -526,7 +598,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "Barre seule pour apprendre, puis +2,5 kg par côté", valerie: "Barre de la Smith seule, amplitude confortable" },
+    charge: { standard: "Barre seule pour apprendre, puis +2,5 kg par côté", doux: "Barre de la Smith seule, amplitude confortable" },
     variante: "Goblet squat si la barre impressionne encore.",
     conseil:
       "Pieds légèrement ouverts, descends comme pour t’asseoir, talons ancrés. La barre guidée sécurise la trajectoire.",
@@ -538,7 +610,7 @@ const EXOS = {
     series: 3,
     reps: "8 / jambe",
     repos: 90,
-    charge: { esteban: "2 haltères de 6–10 kg", valerie: "Poids du corps, une main sur un support" },
+    charge: { standard: "2 haltères de 6–10 kg", doux: "Poids du corps, une main sur un support" },
     variante: "Fentes arrière, plus douces pour les genoux.",
     conseil:
       "Grand pas, buste droit, le genou avant reste au-dessus de la cheville. Le genou arrière descend vers le sol.",
@@ -550,7 +622,7 @@ const EXOS = {
     series: 3,
     reps: "15",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 35–50 kg", valerie: "Départ conseillé : 15–25 kg" },
+    charge: { standard: "Départ conseillé : 35–50 kg", doux: "Départ conseillé : 15–25 kg" },
     variante: "Avec un élastique au-dessus des genoux si la machine est prise.",
     conseil: "Pousse les genoux vers l’extérieur sans décoller le dos du dossier, reviens lentement.",
   },
@@ -561,7 +633,7 @@ const EXOS = {
     series: 3,
     reps: "15",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 30–45 kg", valerie: "Départ conseillé : 15–20 kg" },
+    charge: { standard: "Départ conseillé : 30–45 kg", doux: "Départ conseillé : 15–20 kg" },
     variante: "Serre un ballon entre les genoux, allongée, à défaut.",
     conseil: "Serre en 1 seconde, retiens 2–3 secondes au retour. Sans à-coups.",
   },
@@ -572,7 +644,7 @@ const EXOS = {
     series: 3,
     reps: "12 / jambe",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 10–15 kg", valerie: "Départ conseillé : 5–7,5 kg" },
+    charge: { standard: "Départ conseillé : 10–15 kg", doux: "Départ conseillé : 5–7,5 kg" },
     variante: "À quatre pattes au sol (donkey kick), sans poulie.",
     conseil: "Sangle à la cheville, jambe qui pousse vers l’arrière, serre le fessier 1 s. Sans cambrer le dos.",
   },
@@ -583,7 +655,7 @@ const EXOS = {
     series: 3,
     reps: "15",
     repos: 45,
-    charge: { esteban: "Machine +20–40 kg, ou poids du corps sur une marche", valerie: "Poids du corps sur une marche, en te tenant" },
+    charge: { standard: "Machine +20–40 kg, ou poids du corps sur une marche", doux: "Poids du corps sur une marche, en te tenant" },
     variante: "Version assise pour varier l’angle.",
     conseil: "Monte haut sur la pointe, marque 1 s en haut, laisse le talon descendre bien bas.",
   },
@@ -594,7 +666,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 3–5 kg" },
+    charge: { standard: "2 haltères de 10–14 kg", doux: "2 haltères de 3–5 kg" },
     variante: "À la barre quand le geste est bien acquis.",
     conseil:
       "Pieds au sol, omoplates serrées, descends les haltères au niveau de la poitrine, coudes à environ 45°.",
@@ -606,7 +678,7 @@ const EXOS = {
     series: 3,
     reps: "10",
     repos: 90,
-    charge: { esteban: "15–25 kg machine, ou 2 haltères de 8–12 kg", valerie: "5–10 kg machine, ou 2 haltères de 3–4 kg" },
+    charge: { standard: "15–25 kg machine, ou 2 haltères de 8–12 kg", doux: "5–10 kg machine, ou 2 haltères de 3–4 kg" },
     variante: "Pompes pieds au sol, mains sur banc incliné.",
     conseil: "Banc entre 30 et 45°. Vise le haut de la poitrine, sans cambrer le bas du dos.",
   },
@@ -617,7 +689,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 10–15 kg par côté", valerie: "Départ conseillé : 5–7,5 kg par côté" },
+    charge: { standard: "Départ conseillé : 10–15 kg par côté", doux: "Départ conseillé : 5–7,5 kg par côté" },
     variante: "Pec deck (machine papillon), plus guidé.",
     conseil: "Bras presque tendus, grand mouvement d’accolade. Reste léger : c’est un exercice de finition.",
   },
@@ -628,7 +700,7 @@ const EXOS = {
     series: 3,
     reps: "8",
     repos: 90,
-    charge: { esteban: "Assistance moyenne (–20 à –30 kg)", valerie: "Assistance forte (–35 kg et plus)" },
+    charge: { standard: "Assistance moyenne (–20 à –30 kg)", doux: "Assistance forte (–35 kg et plus)" },
     variante: "Ou pompes sur banc si la machine manque.",
     conseil: "Penche-toi légèrement en avant, descends jusqu’à 90° aux coudes — pas plus bas.",
   },
@@ -640,8 +712,8 @@ const EXOS = {
     reps: "8–10",
     repos: 120,
     charge: {
-      esteban: "Barre seule (20 kg) pour caler la technique, puis +2,5 kg par côté",
-      valerie: "Barre légère ou barre guidée (Smith), amplitude confortable",
+      standard: "Barre seule (20 kg) pour caler la technique, puis +2,5 kg par côté",
+      doux: "Barre légère ou barre guidée (Smith), amplitude confortable",
     },
     variante: "À la barre guidée (Smith) ou aux haltères pour démarrer en sécurité.",
     conseil:
@@ -654,7 +726,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 25–40 kg", valerie: "Départ conseillé : 10–20 kg" },
+    charge: { standard: "Départ conseillé : 25–40 kg", doux: "Départ conseillé : 10–20 kg" },
     variante: "Écarté à la poulie si la machine est prise.",
     conseil: "Dos bien calé au dossier, avant-bras sur les coussinets, rapproche les coudes en serrant la poitrine 1 s, reviens en contrôlant.",
   },
@@ -665,7 +737,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 20–30 kg", valerie: "Départ conseillé : 10–15 kg" },
+    charge: { standard: "Départ conseillé : 20–30 kg", doux: "Départ conseillé : 10–15 kg" },
     variante: "Avec un haltère en travers d’un banc à défaut de poulie.",
     conseil: "Bras presque tendus, tire la barre vers les cuisses en gardant le buste stable. Tu sens la poitrine et les grands dorsaux travailler ensemble.",
   },
@@ -676,7 +748,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "2 haltères de 4–6 kg", valerie: "2 haltères de 2–3 kg" },
+    charge: { standard: "2 haltères de 4–6 kg", doux: "2 haltères de 2–3 kg" },
     variante: "À la poulie basse, un bras à la fois.",
     conseil: "Coudes à peine fléchis, monte jusqu’à l’horizontale, redescends en 2 s. Léger, toujours.",
   },
@@ -687,7 +759,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "2 haltères de 4–6 kg", valerie: "2 haltères de 2–3 kg" },
+    charge: { standard: "2 haltères de 4–6 kg", doux: "2 haltères de 2–3 kg" },
     variante: "Machine reverse fly (papillon inversé).",
     conseil: "Buste penché, dos plat, écarte les bras comme des ailes — sans élan. Arrière d’épaule et posture.",
   },
@@ -698,7 +770,7 @@ const EXOS = {
     series: 3,
     reps: "15",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 10–15 kg", valerie: "Départ conseillé : 5–7,5 kg" },
+    charge: { standard: "Départ conseillé : 10–15 kg", doux: "Départ conseillé : 5–7,5 kg" },
     variante: "Oiseau aux haltères à défaut de poulie.",
     conseil: "Poulie à hauteur du visage, tire la corde vers le front en écartant les mains, coudes hauts. Excellent pour la posture.",
   },
@@ -709,7 +781,7 @@ const EXOS = {
     series: 2,
     reps: "12",
     repos: 60,
-    charge: { esteban: "2 haltères de 10–14 kg", valerie: "2 haltères de 4–6 kg" },
+    charge: { standard: "2 haltères de 10–14 kg", doux: "2 haltères de 4–6 kg" },
     variante: "À la barre ou à la Smith machine.",
     conseil: "Hausse les épaules droit vers les oreilles, marque 1 s, redescends. Sans rouler les épaules.",
   },
@@ -720,7 +792,7 @@ const EXOS = {
     series: 3,
     reps: "6–8",
     repos: 90,
-    charge: { esteban: "Assistance –25 à –35 kg", valerie: "Assistance –45 kg et plus" },
+    charge: { standard: "Assistance –25 à –35 kg", doux: "Assistance –45 kg et plus" },
     variante: "Tirage vertical si la machine manque.",
     conseil: "Prise un peu plus large que les épaules, tire la poitrine vers la barre, redescends bras presque tendus.",
   },
@@ -731,7 +803,7 @@ const EXOS = {
     series: 3,
     reps: "10 / bras",
     repos: 90,
-    charge: { esteban: "Haltère de 10–16 kg", valerie: "Haltère de 4–6 kg" },
+    charge: { standard: "Haltère de 10–16 kg", doux: "Haltère de 4–6 kg" },
     variante: "Rowing assis machine pour un geste plus guidé.",
     conseil: "Main et genou sur le banc, dos plat. Tire le coude vers la hanche, sans tourner le buste.",
   },
@@ -742,7 +814,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "2 haltères de 6–10 kg", valerie: "2 haltères de 2–4 kg" },
+    charge: { standard: "2 haltères de 6–10 kg", doux: "2 haltères de 2–4 kg" },
     variante: "À la poulie basse pour une tension continue.",
     conseil: "Coudes collés au buste, redescends complètement et lentement — c’est la descente qui construit.",
   },
@@ -753,7 +825,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "2 haltères de 6–10 kg", valerie: "2 haltères de 2–4 kg" },
+    charge: { standard: "2 haltères de 6–10 kg", doux: "2 haltères de 2–4 kg" },
     variante: "En alternant les bras pour rester propre.",
     conseil: "Paumes face à face, comme si tu plantais un clou. Zéro élan, zéro balancement.",
   },
@@ -764,7 +836,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 15–20 kg", valerie: "Départ conseillé : 5–10 kg" },
+    charge: { standard: "Départ conseillé : 15–20 kg", doux: "Départ conseillé : 5–10 kg" },
     variante: "Version corde si tu veux plus d’amplitude en fin de mouvement.",
     conseil:
       "Barre droite ou coudée, prise largeur d’épaules, coudes soudés au buste. Tends complètement les bras vers le bas, remonte lentement sans décoller les coudes.",
@@ -776,7 +848,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 12–17 kg", valerie: "Départ conseillé : 5–10 kg" },
+    charge: { standard: "Départ conseillé : 12–17 kg", doux: "Départ conseillé : 5–10 kg" },
     variante: "Version barre pour charger un peu plus lourd.",
     conseil:
       "Coudes collés au corps, et surtout : écarte les deux brins de la corde en fin de mouvement, poignets vers l’extérieur. C’est là que le triceps se contracte le plus.",
@@ -788,7 +860,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Départ conseillé : 15–25 kg", valerie: "Départ conseillé : 5–12 kg" },
+    charge: { standard: "Départ conseillé : 15–25 kg", doux: "Départ conseillé : 5–12 kg" },
     variante: "À la corde ou à la barre selon ce qui est libre.",
     conseil:
       "Debout face à la poulie basse, coudes fixes le long du buste. La poulie garde une tension constante du début à la fin — inutile de charger lourd, la descente lente fait le travail.",
@@ -801,7 +873,7 @@ const EXOS = {
     reps: "15",
     repos: 45,
     sansCharge: true,
-    charge: { esteban: "Mains aux tempes", valerie: "Bras tendus vers les genoux" },
+    charge: { standard: "Mains aux tempes", doux: "Bras tendus vers les genoux" },
     variante: "À la machine à abdos si tu préfères doser une charge.",
     conseil: "Décolle seulement le haut du dos, souffle en montant. Petit mouvement, grande contraction.",
   },
@@ -813,7 +885,7 @@ const EXOS = {
     reps: "10",
     repos: 60,
     sansCharge: true,
-    charge: { esteban: "À la chaise romaine", valerie: "Assise au bord d’un banc, mains derrière toi" },
+    charge: { standard: "À la chaise romaine", doux: "Assise au bord d’un banc, mains derrière toi" },
     variante: "Jambes tendues quand les genoux deviennent faciles.",
     conseil: "Remonte les genoux vers la poitrine sans te balancer, redescends lentement.",
   },
@@ -824,7 +896,7 @@ const EXOS = {
     series: 3,
     reps: "10 / côté",
     repos: 45,
-    charge: { esteban: "Disque ou haltère de 2,5–5 kg", valerie: "Sans poids d’abord, mains jointes" },
+    charge: { standard: "Disque ou haltère de 2,5–5 kg", doux: "Sans poids d’abord, mains jointes" },
     variante: "Pieds au sol pour commencer, décollés ensuite.",
     conseil: "Assis, buste légèrement incliné, tourne les épaules — pas seulement les bras.",
   },
@@ -836,7 +908,7 @@ const EXOS = {
     reps: "20 s",
     repos: 45,
     sansCharge: true,
-    charge: { esteban: "Rythme soutenu", valerie: "Rythme lent, hanches bien stables" },
+    charge: { standard: "Rythme soutenu", doux: "Rythme lent, hanches bien stables" },
     variante: "Mains sur un banc pour une version plus douce.",
     conseil: "Position de pompe, ramène les genoux l’un après l’autre en gardant les hanches basses. Cardio et gainage à la fois.",
   },
@@ -847,7 +919,7 @@ const EXOS = {
     series: 2,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Poids du corps, puis un disque de 5 kg contre la poitrine", valerie: "Poids du corps, amplitude réduite" },
+    charge: { standard: "Poids du corps, puis un disque de 5 kg contre la poitrine", doux: "Poids du corps, amplitude réduite" },
     variante: "Superman au sol à défaut de banc.",
     conseil: "Remonte jusqu’à l’alignement du corps, pas plus haut. Lentement — le bas du dos aime la douceur.",
   },
@@ -859,7 +931,7 @@ const EXOS = {
     reps: "10",
     repos: 45,
     sansCharge: true,
-    charge: { esteban: "Tiens 2 s en haut", valerie: "Bras et jambe opposés en alternance" },
+    charge: { standard: "Tiens 2 s en haut", doux: "Bras et jambe opposés en alternance" },
     variante: "Sur un tapis, coussin sous les hanches si besoin.",
     conseil: "Allongé sur le ventre, décolle bras et jambes de quelques centimètres, regard vers le sol.",
   },
@@ -871,7 +943,7 @@ const EXOS = {
     reps: "15",
     repos: 45,
     sansCharge: true,
-    charge: { esteban: "Rythme soutenu, amplitude complète", valerie: "Vers une chaise pour te repérer au départ" },
+    charge: { standard: "Rythme soutenu, amplitude complète", doux: "Vers une chaise pour te repérer au départ" },
     variante: "Bras tendus devant pour l’équilibre.",
     conseil: "Pieds à largeur d’épaules, descends comme pour t’asseoir, talons au sol, remonte en serrant les fessiers.",
   },
@@ -882,7 +954,7 @@ const EXOS = {
     series: 3,
     reps: "12",
     repos: 60,
-    charge: { esteban: "Poids du corps, ou haltère de 12–20 kg tenu vertical", valerie: "Poids du corps, puis haltère léger" },
+    charge: { standard: "Poids du corps, ou haltère de 12–20 kg tenu vertical", doux: "Poids du corps, puis haltère léger" },
     variante: "Sur les pointes en haut pour prendre les mollets.",
     conseil: "Pieds bien plus larges que les épaules, pointes ouvertes, genoux qui suivent les pointes. Vise l’intérieur des cuisses et les fessiers.",
   },
@@ -893,7 +965,7 @@ const EXOS = {
     series: 3,
     reps: "8 / jambe",
     repos: 90,
-    charge: { esteban: "Poids du corps, puis 2 haltères de 6–10 kg", valerie: "Poids du corps, une main en appui" },
+    charge: { standard: "Poids du corps, puis 2 haltères de 6–10 kg", doux: "Poids du corps, une main en appui" },
     variante: "Chaise, banc ou marche : tout support stable fait l’affaire.",
     conseil: "Pied arrière posé sur le support, tout le poids sur la jambe avant. Descends droit, genou avant au-dessus de la cheville.",
   },
@@ -1176,7 +1248,7 @@ function SchemaMuscles({ muscles = [], hauteur = 82 }) {
 /* ------------------------------------------------------------------ */
 
 const ECHAUFFEMENT = {
-  duree: { esteban: "5 à 7 min", valerie: "8 à 10 min" },
+  duree: { standard: "5 à 7 min", doux: "8 à 10 min" },
   mobilite: [
     "10 grands cercles de bras (avant puis arrière)",
     "10 rotations du buste, mains sur les hanches",
@@ -1190,9 +1262,9 @@ const RETOUR_AU_CALME =
   "3 min de marche très lente pour redescendre, puis 30 s d’étirement doux par groupe : quadriceps, ischios, fessiers, poitrine, dos. Respire profondément — cette séance, personne ne pourra te l’enlever.";
 
 const CARDIO_GENERIQUE = {
-  esteban:
+  standard:
     "15–20 min au choix : tapis incliné, vélo ou elliptique, à allure modérée. Option : quelques passages plus toniques d’une minute.",
-  valerie:
+  doux:
     "15–20 min au choix : vélo ou elliptique de préférence (zéro impact), à une allure où tu peux parler.",
 };
 
@@ -1211,9 +1283,9 @@ const PROGRAMMES_BASE = [
         resume: "Presse · Développé poitrine · Tirage vertical",
         exos: [EXOS.presse, EXOS["dev-poitrine"], EXOS["tirage-vertical"], EXOS["leg-curl"], EXOS.planche],
         cardio: {
-          esteban:
+          standard:
             "Tapis : 15–20 min de marche rapide inclinée (5–8 %, 5,5–6,5 km/h). Option intervalles doux : 6 × (1 min tonique / 1 min tranquille).",
-          valerie:
+          doux:
             "Vélo ou elliptique : 15–20 min à allure modérée — tu dois pouvoir parler, pas chanter. Zéro impact pour les genoux.",
         },
       },
@@ -1225,9 +1297,9 @@ const PROGRAMMES_BASE = [
         resume: "Goblet squat · Épaules · Rowing",
         exos: [EXOS.goblet, EXOS["dev-epaules"], EXOS.rowing, EXOS["hip-thrust"], EXOS["dead-bug"]],
         cardio: {
-          esteban:
+          standard:
             "Elliptique : 15–20 min, résistance moyenne. Option : monte la résistance d’un cran 1 min sur 3.",
-          valerie: "Elliptique : 15 min tranquilles, résistance légère. Aucun impact, que du bénéfice.",
+          doux: "Elliptique : 15 min tranquilles, résistance légère. Aucun impact, que du bénéfice.",
         },
       },
       {
@@ -1241,9 +1313,9 @@ const PROGRAMMES_BASE = [
           EXOS["leg-extension"], EXOS["planche-laterale"],
         ],
         cardio: {
-          esteban:
+          standard:
             "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min, puis redescends sur les 3 dernières.",
-          valerie:
+          doux:
             "Vélo : 15–20 min, allure régulière. Règle la selle : jambe presque tendue quand la pédale est en bas.",
         },
       },
@@ -1266,9 +1338,9 @@ const PROGRAMMES_BASE = [
           EXOS.rowing, EXOS.planche,
         ],
         cardio: {
-          esteban:
+          standard:
             "Tapis : 15–20 min de marche inclinée — les jambes sont fraîches, profites-en. Option : 6 × (1 min tonique / 1 min tranquille).",
-          valerie: "Vélo ou elliptique : 15–20 min à allure modérée, zéro impact.",
+          doux: "Vélo ou elliptique : 15–20 min à allure modérée, zéro impact.",
         },
       },
       {
@@ -1282,8 +1354,8 @@ const PROGRAMMES_BASE = [
           EXOS["hip-thrust"], EXOS["dead-bug"],
         ],
         cardio: {
-          esteban: "Elliptique : 15 min tranquilles — les jambes ont déjà bien travaillé aujourd’hui.",
-          valerie: "Elliptique : 12–15 min très douces, résistance légère.",
+          standard: "Elliptique : 15 min tranquilles — les jambes ont déjà bien travaillé aujourd’hui.",
+          doux: "Elliptique : 12–15 min très douces, résistance légère.",
         },
       },
       {
@@ -1297,8 +1369,8 @@ const PROGRAMMES_BASE = [
           EXOS["tirage-horizontal"], EXOS["planche-laterale"],
         ],
         cardio: {
-          esteban: "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min.",
-          valerie: "Vélo : 15–20 min, selle bien réglée : jambe presque tendue quand la pédale est en bas.",
+          standard: "Vélo : 15–20 min. Option : augmente la résistance d’un palier toutes les 5 min.",
+          doux: "Vélo : 15–20 min, selle bien réglée : jambe presque tendue quand la pédale est en bas.",
         },
       },
     ],
@@ -1498,9 +1570,12 @@ function ordonnerSlots(slots, ordre) {
 async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
   const exosPerso = (await lire("app:exosPerso")) || [];
+  const brutProfils = await lire("app:profils");
+  const profils =
+    Array.isArray(brutProfils) && brutProfils.length ? brutProfils : PROFILS_DEFAUT;
   const ids = idsSeancesDe(persos);
   const res = {};
-  for (const p of ["esteban", "valerie"]) {
+  for (const p of profils.map((x) => x.id)) {
     const seances = {};
     await Promise.all(
       ids.map(async (id) => {
@@ -1518,10 +1593,10 @@ async function chargerTout() {
       charges: ch || {},
       historique: (ass && ass.historique) || [],
       mode: typeof mode === "string" ? mode : "fullbody",
-      mesures: { ...MESURES_DEFAUT[p], ...(mesures || {}) },
+      mesures: { ...(MESURES_DEFAUT[p] || {}), ...(mesures || {}) },
     };
   }
-  return { persos, exosPerso, res };
+  return { persos, exosPerso, profils, res };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1621,46 +1696,86 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
 }
 
 /* Écran de verrouillage — code d'accès */
-function EcranVerrou({ profil, erreur, occupe, surValider }) {
+/* Écran d'entrée : rejoindre un espace existant ou en créer un.
+   Un espace = un groupe (un duo, une bande de potes) avec ses données à lui. */
+function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
+  const [mode, setMode] = useState("rejoindre"); // "rejoindre" | "creer"
+  const [nom, setNom] = useState(nomInitial || "");
   const [code, setCode] = useState("");
+  const creation = mode === "creer";
+  const pret = nom.trim().length > 0 && code.trim().length >= (creation ? 4 : 1);
+
   return (
-    <div data-profil={profil} className="coquille bg-fond text-encre font-jakarta flex items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-8 text-center vue">
+    <div data-accent="lime" className="coquille bg-fond text-encre font-jakarta flex items-center justify-center px-6">
+      <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-7 vue">
         <span className="mx-auto h-16 w-16 rounded-2xl bg-accent flex items-center justify-center">
           <Dumbbell size={30} className="text-accent-ink" strokeWidth={2.5} />
         </span>
-        <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Coachwork</h1>
-        <p className="text-brume text-sm mt-2 leading-relaxed">
-          Cette app est protégée. Entre le code d’accès pour continuer.
+        <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-center">Coachwork</h1>
+        <p className="text-brume text-sm mt-2 leading-relaxed text-center">
+          {creation
+            ? "Choisis un nom d’espace et un code : tes potes entreront avec ces deux-là."
+            : "Entre le nom de ton espace et son code pour retrouver tes séances."}
         </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-1 rounded-2xl bg-carte2 p-1">
+          {[["rejoindre", "Rejoindre"], ["creer", "Créer"]].map(([id, libelle]) => (
+            <button
+              key={id}
+              onClick={() => setMode(id)}
+              className={`h-10 rounded-xl text-sm font-bold transi ${
+                mode === id ? "bg-accent text-accent-ink" : "text-brume"
+              }`}
+            >
+              {libelle}
+            </button>
+          ))}
+        </div>
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (code.trim() && !occupe) surValider(code.trim());
+            if (!pret || occupe) return;
+            (creation ? surCreer : surOuvrir)(nom.trim(), code.trim());
           }}
         >
+          <input
+            type="text"
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            placeholder="Nom de l’espace (ex. : Team Kevin)"
+            autoComplete="off"
+            className="mt-4 w-full rounded-2xl bg-carte2 px-4 text-center font-bold outline-none placeholder-slate-600"
+            style={{ height: 52 }}
+            aria-label="Nom de l’espace"
+          />
           <input
             type="password"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="Code d’accès"
+            placeholder={creation ? "Code à créer (4 caractères min.)" : "Code de l’espace"}
             autoComplete="off"
-            className="mt-5 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold text-lg outline-none placeholder-slate-600 chiffres"
-            style={{ height: 56 }}
-            aria-label="Code d’accès"
+            className="mt-2 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold text-lg outline-none placeholder-slate-600"
+            style={{ height: 52 }}
+            aria-label="Code de l’espace"
           />
-          {erreur && <p className="text-rouge text-xs mt-3">{erreur}</p>}
+          {erreur && <p className="text-rouge text-xs mt-3 text-center">{erreur}</p>}
           <button
             type="submit"
-            disabled={occupe || !code.trim()}
+            disabled={!pret || occupe}
             className={`mt-4 w-full rounded-2xl font-extrabold text-base transi ${
-              occupe || !code.trim() ? "bg-carte2 text-brume" : "bg-accent text-accent-ink active:scale-98"
+              !pret || occupe ? "bg-carte2 text-brume" : "bg-accent text-accent-ink active:scale-98"
             }`}
             style={{ height: 56 }}
           >
-            {occupe ? "Vérification…" : "Entrer"}
+            {occupe ? "Vérification…" : creation ? "Créer mon espace" : "Entrer"}
           </button>
         </form>
+
+        <p className="text-brume text-xs mt-4 leading-relaxed text-center">
+          Chaque espace a ses propres profils, programmes et historiques. Rien n’est partagé
+          entre deux espaces.
+        </p>
       </div>
     </div>
   );
@@ -1716,7 +1831,10 @@ function etatVide() {
 export default function App() {
   const [profil, setProfil] = useState("esteban");
   const [chargement, setChargement] = useState(true);
-  const [store, setStore] = useState({ esteban: etatVide(), valerie: etatVide() });
+  const [store, setStore] = useState(() =>
+    Object.fromEntries(PROFILS_DEFAUT.map((p) => [p.id, etatVide()]))
+  );
+  const [profils, setProfils] = useState(PROFILS_DEFAUT);
   const [programmesPerso, setProgrammesPerso] = useState([]);
   const [exosPerso, setExosPerso] = useState([]);
   const [syncEtat, setSyncEtat] = useState("off"); // "ok" | "off"
@@ -1727,17 +1845,19 @@ export default function App() {
   const [, setTic] = useState(0); // re-rendu périodique pendant le repos
   const [fete, setFete] = useState(null); // {titre, deja, total}
   const [verrou, setVerrou] = useState(null); // null | {erreur?, occupe?}
+  const [espace, setEspace] = useState(null); // {id, nom} de l’espace ouvert
   const vivantRef = useRef(true);
 
   async function afficherDonnees() {
-    const { persos, exosPerso: ep, res } = await chargerTout();
+    const { persos, exosPerso: ep, profils: pf, res } = await chargerTout();
     let pSauve = await lire("app:profil");
     if (pSauve === "maman") pSauve = "valerie";
     if (!vivantRef.current) return;
     setProgrammesPerso(persos);
     setExosPerso(ep);
+    setProfils(pf);
     setStore(res);
-    if (pSauve === "valerie" || pSauve === "esteban") setProfil(pSauve);
+    setProfil(pf.some((x) => x.id === pSauve) ? pSauve : pf[0].id);
     setChargement(false);
   }
 
@@ -1745,8 +1865,10 @@ export default function App() {
   useEffect(() => {
     vivantRef.current = true;
     (async () => {
-      horodatages = (await lire("app:horodatages")) || {};
+      /* l'espace d'abord : il détermine où les données sont rangées */
       codeApp = await lire("app:code");
+      espaceApp = await lire("app:espace");
+      horodatages = (await lire("app:horodatages")) || {};
       let statut = "off";
       try {
         statut = await tirerDepuisServeur();
@@ -1757,32 +1879,71 @@ export default function App() {
         return;
       }
       setSyncEtat(statut === "ok" || statut === "maj" ? "ok" : "off");
+      setEspace(espaceApp);
       await afficherDonnees();
     })();
     return () => { vivantRef.current = false; };
   }, []);
 
-  /* ---- déverrouillage par code d'accès ---- */
-  async function deverrouiller(code) {
+  /* ---- ouverture / création d'un espace ---- */
+  async function tenterEspace(nom, code, creer) {
     setVerrou({ occupe: true });
-    codeApp = code;
-    let statut;
+    let rep;
     try {
-      statut = await tirerDepuisServeur();
+      rep = await fetch(API_ESPACE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: creer ? "creer" : "ouvrir", nom, code }),
+      });
     } catch (e) {
-      codeApp = null;
       setVerrou({ erreur: "Serveur injoignable — réessaie dans un instant." });
       return;
     }
-    if (statut === "code") {
-      codeApp = null;
-      setVerrou({ erreur: "Code incorrect, réessaie." });
+    let corps = {};
+    try { corps = await rep.json(); } catch (e) {}
+
+    if (!rep.ok) {
+      const messages = {
+        404: "Cet espace n’existe pas — vérifie le nom, ou crée-le.",
+        401: "Code incorrect, réessaie.",
+        409: "Ce nom d’espace est déjà pris, choisis-en un autre.",
+        429: "Trop d’essais. Patiente une quinzaine de minutes.",
+      };
+      setVerrou({ erreur: messages[rep.status] || corps.erreur || "Impossible d’ouvrir cet espace." });
       return;
     }
-    ecrireBrut("app:code", code);
+    if (corps.sync === false) {
+      /* pas de base configurée : l'app reste utilisable en local */
+      setVerrou(null);
+      setSyncEtat("off");
+      await afficherDonnees();
+      return;
+    }
+
+    const infos = { id: corps.id, nom: corps.nom };
+    espaceApp = infos;
+    codeApp = code;
+    await ecrireBrut("app:espace", infos);
+    await ecrireBrut("app:code", code);
+    /* chaque espace a ses propres données locales : on reprend les siennes */
+    horodatages = (await lire("app:horodatages")) || {};
+    try {
+      await tirerDepuisServeur();
+    } catch (e) {}
+    setEspace(infos);
     setSyncEtat("ok");
     setVerrou(null);
     await afficherDonnees();
+  }
+
+  /* quitter l'espace : on n'efface que ce qui identifie l'appareil */
+  function quitterEspace() {
+    espaceApp = null;
+    codeApp = null;
+    ecrireBrut("app:espace", null);
+    ecrireBrut("app:code", null);
+    setEspace(null);
+    setVerrou({});
   }
 
   /* ---- rafraîchissement périodique quand la synchro est active ---- */
@@ -1792,9 +1953,10 @@ export default function App() {
       try {
         const statut = await tirerDepuisServeur();
         if (statut === "maj") {
-          const { persos, exosPerso: ep, res } = await chargerTout();
+          const { persos, exosPerso: ep, profils: pf, res } = await chargerTout();
           setProgrammesPerso(persos);
           setExosPerso(ep);
+          setProfils(pf);
           setStore(res);
         } else if (statut === "code") {
           /* le code a été changé côté serveur : on reverrouille */
@@ -1926,7 +2088,10 @@ export default function App() {
   }
 
   /* ---- mutations ---- */
-  const donnees = store[profil];
+  const profilActif = profils.find((p) => p.id === profil) || profils[0];
+  const niveauActif = (profilActif && profilActif.niveau) || "standard";
+  const accentActif = (profilActif && profilActif.accent) || "lime";
+  const donnees = store[profil] || etatVide();
   const progActuel = programmes.find((p) => p.id === donnees.mode) || programmes[0];
 
   function choisirProfil(p) {
@@ -1934,10 +2099,49 @@ export default function App() {
     ecrire("app:profil", p);
   }
 
+  function enregistrerProfils(liste) {
+    setProfils(liste);
+    ecrire("app:profils", liste);
+  }
+
+  /* nouveau profil : identifiant unique et durable, données vierges */
+  function ajouterProfil() {
+    const id = `profil-${Date.now().toString(36)}`;
+    const pris = new Set(profils.map((p) => p.accent));
+    const libre = (ACCENTS.find((a) => !pris.has(a.id)) || ACCENTS[0]).id;
+    enregistrerProfils([
+      ...profils,
+      { id, nom: `Profil ${profils.length + 1}`, niveau: "standard", accent: libre },
+    ]);
+    setStore((prev) => ({ ...prev, [id]: etatVide() }));
+    choisirProfil(id);
+    setOnglet("semaine");
+  }
+
+  function majProfil(id, patch) {
+    enregistrerProfils(profils.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  /* suppression : on retire aussi les données du profil (local + synchro) */
+  function supprimerProfil(id) {
+    if (profils.length <= 1) return;
+    const reste = profils.filter((p) => p.id !== id);
+    enregistrerProfils(reste);
+    for (const suffixe of ["charges", "assiduite", "mode", "mesures"]) {
+      ecrire(`${id}:${suffixe}`, null);
+    }
+    setStore((prev) => {
+      const c = { ...prev };
+      delete c[id];
+      return c;
+    });
+    if (profil === id) choisirProfil(reste[0].id);
+  }
+
   /* les feuilles sont portalées sur <body> : il porte aussi l'accent du profil */
   useEffect(() => {
-    document.body.dataset.profil = profil;
-  }, [profil]);
+    document.body.dataset.accent = accentActif;
+  }, [accentActif]);
 
   function basculerEtape(sid, eid) {
     setStore((prev) => {
@@ -2214,11 +2418,12 @@ export default function App() {
   /* ---- écran de verrouillage ---- */
   if (verrou) {
     return (
-      <EcranVerrou
-        profil={profil}
+      <EcranEspace
         erreur={verrou.erreur}
         occupe={!!verrou.occupe}
-        surValider={deverrouiller}
+        nomInitial={espace ? espace.nom : ""}
+        surOuvrir={(nom, code) => tenterEspace(nom, code, false)}
+        surCreer={(nom, code) => tenterEspace(nom, code, true)}
       />
     );
   }
@@ -2226,7 +2431,7 @@ export default function App() {
   /* ---- écran de chargement ---- */
   if (chargement) {
     return (
-      <div data-profil={profil} className="coquille bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-4">
+      <div data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-4">
         <Dumbbell size={40} className="text-accent pulsation" />
         <p className="text-brume text-sm">Chargement de vos séances…</p>
       </div>
@@ -2236,7 +2441,7 @@ export default function App() {
   const seanceOuverte = toutesSeances.find((s) => s.id === ouverte) || null;
 
   return (
-    <div ref={defileur} data-profil={profil} className="coquille bg-fond text-encre font-jakarta">
+    <div ref={defileur} data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta">
       <div className="mx-auto max-w-md px-4 pb-32">
 
         {/* ---------- en-tête ---------- */}
@@ -2245,46 +2450,67 @@ export default function App() {
             <span className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center transi">
               <Dumbbell size={20} className="text-accent-ink" strokeWidth={2.5} />
             </span>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h1 className="text-lg font-extrabold leading-none tracking-tight">Coachwork</h1>
-              <p className="text-brume text-xs mt-0.5">3 séances / semaine, à deux</p>
+              <p className="text-brume text-xs mt-0.5 truncate">
+                {espace ? espace.nom : "3 séances / semaine"}
+              </p>
             </div>
-            <span
-              className="flex items-center gap-1.5 text-xs text-brume"
-              title={syncEtat === "ok" ? "Synchronisé entre vos téléphones" : "Données sur cet appareil uniquement"}
+            <button
+              onClick={espace ? quitterEspace : undefined}
+              disabled={!espace}
+              aria-label={espace ? `Espace ${espace.nom} — changer d’espace` : "Données sur cet appareil uniquement"}
+              title={syncEtat === "ok" ? "Synchronisé — appuie pour changer d’espace" : "Données sur cet appareil uniquement"}
+              className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transi ${
+                espace ? "bg-carte border border-ligne active:scale-95" : ""
+              }`}
             >
               {syncEtat === "ok"
                 ? <Cloud size={16} className="text-accent transi" />
-                : <CloudOff size={16} />}
-            </span>
+                : <CloudOff size={16} className="text-brume" />}
+            </button>
           </div>
 
-          {/* sélecteur de profil */}
-          <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label="Choisir le profil">
-            {Object.keys(PROFILS).map((id) => {
-              const actif = profil === id;
-              const nom = nomAffiche(store[id], id);
+          {/* sélecteur de profil (un par personne de l’espace) */}
+          <div
+            className={`mt-4 grid gap-2 ${profils.length > 2 ? "grid-cols-3" : "grid-cols-2"}`}
+            role="group"
+            aria-label="Choisir le profil"
+          >
+            {profils.map((p) => {
+              const actif = profil === p.id;
+              const nom = nomAffiche(store[p.id], p);
               return (
                 <button
-                  key={id}
-                  onClick={() => choisirProfil(id)}
-                  className={`h-14 rounded-2xl flex items-center justify-center gap-2.5 font-bold transi border ${
+                  key={p.id}
+                  onClick={() => choisirProfil(p.id)}
+                  data-accent={p.accent || "lime"}
+                  className={`h-14 rounded-2xl flex items-center justify-center gap-2 font-bold transi border px-2 ${
                     actif
                       ? "bg-accent text-accent-ink border-transparent"
                       : "bg-carte text-brume border-ligne active:scale-95"
                   }`}
                 >
                   <span
-                    className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-extrabold transi ${
-                      actif ? "encre-sur-accent" : "bg-carte2"
+                    className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-extrabold shrink-0 transi ${
+                      actif ? "encre-sur-accent" : `pastille-${p.accent || "lime"} text-fond`
                     }`}
                   >
                     {nom.charAt(0).toUpperCase()}
                   </span>
-                  <span className="truncate" style={{ maxWidth: 110 }}>{nom}</span>
+                  <span className="truncate min-w-0">{nom}</span>
                 </button>
               );
             })}
+            {profils.length < 6 && (
+              <button
+                onClick={ajouterProfil}
+                aria-label="Ajouter un profil"
+                className="h-14 rounded-2xl border border-dashed border-slate-600 text-brume flex items-center justify-center gap-1.5 text-sm font-bold active:scale-95 transi"
+              >
+                <Plus size={17} /> Profil
+              </button>
+            )}
           </div>
         </header>
 
@@ -2304,6 +2530,7 @@ export default function App() {
           <VueSeance
             seance={seanceOuverte}
             profil={profil}
+            niveau={niveauActif}
             etat={normaliserSeance(donnees.seances[seanceOuverte.id])}
             charges={donnees.charges}
             dico={dicoExos}
@@ -2348,6 +2575,8 @@ export default function App() {
             {onglet === "semaine" ? (
               <VueSemaine
                 profil={profil}
+                profilObj={profilActif}
+                profils={profils}
                 stats={stats}
                 donnees={donnees}
                 programmes={programmes}
@@ -2356,6 +2585,8 @@ export default function App() {
                 surOuvrir={setOuverte}
                 surMode={choisirMode}
                 surMesure={noterMesure}
+                surMajProfil={(patch) => majProfil(profil, patch)}
+                surSupprimerProfil={() => supprimerProfil(profil)}
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
               />
@@ -2376,7 +2607,7 @@ export default function App() {
                     icone={c.icone}
                     titre={c.titre}
                     texte={c.texte}
-                    accent={profil === "valerie" && c.id === "cinquante-quatre"}
+                    accent={niveauActif === "doux" && c.id === "cinquante-quatre"}
                   />
                 ))}
                 <p className="text-brume text-center text-xs pt-2 leading-relaxed">
@@ -2483,12 +2714,15 @@ export default function App() {
 /* ------------------------------------------------------------------ */
 
 function VueSemaine({
-  profil, stats, donnees, programmes, progActuel, syncEtat,
-  surOuvrir, surMode, surMesure, surCreer, surEditer,
+  profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat,
+  surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surCreer, surEditer,
 }) {
-  const p = PROFILS[profil];
-  const nom = nomAffiche(donnees, profil);
+  const p = profilObj;
+  const nom = nomAffiche(donnees, p);
   const dateFr = FORMAT_JOUR.format(new Date());
+  const age = parseCharge(donnees.mesures.age);
+  /* le conseil « densité osseuse » n’a de sens qu’après 50 ans */
+  const noteOsseuse = age != null && age >= 50;
 
   return (
     <div key={profil} className="vue space-y-5">
@@ -2497,7 +2731,7 @@ function VueSemaine({
         <h2 className="text-2xl font-extrabold tracking-tight mt-1">
           Salut {nom} !
         </h2>
-        <p className="text-brume text-sm mt-1">{p.detail} — on avance à ton rythme.</p>
+        <p className="text-brume text-sm mt-1">{p.detail || NIVEAUX[p.niveau || "standard"].detail} — on avance à ton rythme.</p>
       </div>
 
       {/* assiduité */}
@@ -2657,7 +2891,7 @@ function VueSemaine({
             type="text"
             value={donnees.mesures.nom || ""}
             onChange={(e) => surMesure("nom", e.target.value)}
-            placeholder={PROFILS[profil].nom}
+            placeholder={p.nom}
             className="w-full rounded-xl bg-carte2 px-3 text-center font-extrabold text-base outline-none placeholder-slate-600"
             style={{ height: 48 }}
             aria-label="Prénom"
@@ -2689,15 +2923,63 @@ function VueSemaine({
           Le poids n’est qu’un repère parmi d’autres — les séances faites et les charges qui
           montent racontent mieux l’histoire.
         </p>
+
+        {/* niveau : détermine les charges conseillées sur chaque exercice */}
+        <div className="mt-4 pt-4 border-t border-ligne">
+          <span className="text-xs text-brume block mb-1.5">Mon niveau de charges</span>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(NIVEAUX).map(([id, n]) => (
+              <button
+                key={id}
+                onClick={() => surMajProfil({ niveau: id })}
+                aria-pressed={(p.niveau || "standard") === id}
+                className={`rounded-xl px-3 py-2 text-left transi ${
+                  (p.niveau || "standard") === id ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
+                }`}
+              >
+                <span className="block text-sm font-bold">{n.nom}</span>
+                <span className={`block text-xs mt-0.5 ${(p.niveau || "standard") === id ? "opacity-75" : "text-brume"}`}>
+                  {n.detail}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <span className="text-xs text-brume block mt-4 mb-1.5">Ma couleur</span>
+          <div className="flex gap-2">
+            {ACCENTS.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => surMajProfil({ accent: a.id })}
+                aria-label={a.nom}
+                aria-pressed={(p.accent || "lime") === a.id}
+                className={`h-10 w-10 rounded-full pastille-${a.id} flex items-center justify-center active:scale-95 transi ${
+                  (p.accent || "lime") === a.id ? "ring-2 ring-offset-2 ring-offset-carte ring-white" : "opacity-60"
+                }`}
+              >
+                {(p.accent || "lime") === a.id && <Check size={17} strokeWidth={3.5} className="text-fond" />}
+              </button>
+            ))}
+          </div>
+
+          {profils.length > 1 && (
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-brume text-xs flex-1">
+                Supprimer ce profil et toutes ses données :
+              </span>
+              <BoutonSuppression etiquette="Supprimer ce profil" surConfirmer={surSupprimerProfil} />
+            </div>
+          )}
+        </div>
       </section>
 
       {/* note dédiée */}
-      {profil === "valerie" ? (
+      {noteOsseuse ? (
         <section className="rounded-2xl bg-carte border bordure-accent-douce p-4 flex gap-3">
           <HeartPulse size={20} className="text-accent shrink-0 mt-0.5" />
           <p className="text-sm leading-relaxed text-douce">
             <strong className="text-encre">Le renfo, ta meilleure alliée.</strong> Il entretient la
-            densité osseuse et le muscle — exactement ce qu’il faut à 54 ans. Machines assises,
+            densité osseuse et le muscle — exactement ce qu’il faut à {age} ans. Machines assises,
             cardio sans impact, et zéro pression : la douceur d’abord, toujours.
           </p>
         </section>
@@ -3553,7 +3835,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
       repos: parseInt(repos, 10) || 60,
       sansCharge,
       groupe: groupe || undefined,
-      charge: { esteban: texteConsigne, valerie: texteConsigne },
+      charge: { standard: texteConsigne, doux: texteConsigne },
       variante: "",
       conseil: conseil.trim(),
     });
@@ -3780,7 +4062,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* ------------------------------------------------------------------ */
 
 function VueSeance({
-  seance, profil, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
+  seance, profil, niveau, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
   exosPerso, surSauverExo, surSupprimerExo,
   surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
   surBasculerAjout, surRetirerAjout, surRoundsAjout, surDeplacer, surReinitOrdre,
@@ -3886,7 +4168,7 @@ function VueSeance({
           surCoche={() => surCoche("echauffement")}
         >
           <p className="text-sm text-douce leading-relaxed">
-            {ECHAUFFEMENT.duree[profil]} de cardio très doux (vélo ou elliptique), puis :
+            {ECHAUFFEMENT.duree[niveau]} de cardio très doux (vélo ou elliptique), puis :
           </p>
           <ul className="mt-2 space-y-1">
             {ECHAUFFEMENT.mobilite.map((m, i) => (
@@ -3917,6 +4199,7 @@ function VueSeance({
               estAjout={s.ajout}
               variantes={variantes}
               profil={profil}
+              niveau={niveau}
               coche={!!checks[s.slotId]}
               seriesFaites={etat.series[s.slotId] || 0}
               poids={charges[exoAffiche.id] || ""}
@@ -3978,7 +4261,7 @@ function VueSeance({
             coche={!!checks["cardio"]}
             surCoche={() => surCoche("cardio")}
           >
-            <p className="text-sm text-douce leading-relaxed">{seance.cardio[profil]}</p>
+            <p className="text-sm text-douce leading-relaxed">{seance.cardio[niveau]}</p>
           </EtapeSimple>
         )}
 
@@ -4487,7 +4770,7 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 }
 
 function CarteExo({
-  numero, total, exo, nomOriginal, estAjout, variantes = [], profil, coche, seriesFaites, poids,
+  numero, total, exo, nomOriginal, estAjout, variantes = [], profil, niveau, coche, seriesFaites, poids,
   dernierePerf, tabata, rounds, surCoche, surSeries, surRoue, surRepos, surVariante, surTabata,
   surRetirer, surRoundsCycle, surMonter, surDescendre,
 }) {
@@ -4582,7 +4865,7 @@ function CarteExo({
               <span className="text-brume"> · {FORMAT_MINI.format(depuisCle(dernierePerf.d))}</span>
             </p>
           ) : (
-            <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[profil]}</p>
+            <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[niveau]}</p>
           )}
         </div>
         <div className="flex flex-col items-center gap-2 shrink-0">

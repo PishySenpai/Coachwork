@@ -18,7 +18,8 @@ function hach(texte) {
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default async function handler(req, res) {
-  if (garde(req, res)) return;
+  const acces = await garde(req, res);
+  if (!acces) return;
   if (req.method !== "POST") return res.status(405).json({ erreur: "méthode non autorisée" });
 
   try {
