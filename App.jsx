@@ -396,6 +396,9 @@ const PROFILS_DEFAUT = [
   { id: "valerie", nom: "Valérie", niveau: "doux", accent: "corail", detail: "Reprise en douceur" },
 ];
 
+/* Un espace tout neuf démarre vierge : à chacun de composer ses profils */
+const PROFILS_NEUFS = [{ id: "p1", nom: "Profil 1", niveau: "standard", accent: "lime" }];
+
 const MESURES_DEFAUT = {
   esteban: { nom: "Esteban", age: "29", taille: "170", poids: "79" },
   valerie: { nom: "Valérie", age: "54", taille: "154", poids: "65" },
@@ -1571,8 +1574,14 @@ async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
   const exosPerso = (await lire("app:exosPerso")) || [];
   const brutProfils = await lire("app:profils");
+  /* le duo d'origine garde ses profils ; tout autre espace démarre vierge */
+  const origine = !espaceApp || espaceApp.id === "principal";
   const profils =
-    Array.isArray(brutProfils) && brutProfils.length ? brutProfils : PROFILS_DEFAUT;
+    Array.isArray(brutProfils) && brutProfils.length
+      ? brutProfils
+      : origine
+      ? PROFILS_DEFAUT
+      : PROFILS_NEUFS;
   const ids = idsSeancesDe(persos);
   const res = {};
   for (const p of profils.map((x) => x.id)) {
