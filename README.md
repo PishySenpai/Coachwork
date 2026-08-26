@@ -64,3 +64,14 @@ et surtout un **niveau de charges** dans *Mes repères* — Standard, ou Tout en
 affichées sur chaque exercice.
 
 Ne partagez le code d'un espace qu'avec les gens qui doivent y écrire.
+
+## Partager un programme d'un espace à l'autre
+
+Les programmes sont rangés dans l'espace, donc invisibles ailleurs. Pour en passer un à quelqu'un :
+
+1. Dans **Mon programme**, l'icône de partage sur un programme perso génère un **code à 6 caractères**.
+2. La personne saisit ce code dans son espace (**Mon programme → Importer**).
+3. Elle reçoit une **copie indépendante** : la modifier ne touche pas l'original, et inversement.
+
+Les exercices maison utilisés par le programme voyagent avec lui (sinon il arriverait troué).
+Un code vaut 30 jours et ne donne accès **qu'à ce programme** — jamais à un espace ni à ses données.

@@ -35,6 +35,7 @@ const routes = {
   "/api/etat": (await import("./api/etat.js")).default,
   "/api/espace": (await import("./api/espace.js")).default,
   "/api/push-cle": (await import("./api/push-cle.js")).default,
+  "/api/partage": (await import("./api/partage.js")).default,
 };
 
 http

@@ -4,7 +4,7 @@ import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
   Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
-  ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause,
+  ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause, Share2, Download,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -128,6 +128,7 @@ async function migrerVersEspace(id) {
 
 const API_SYNC = "/api/etat";
 const API_ESPACE = "/api/espace";
+const API_PARTAGE = "/api/partage";
 /* Identifient l'appareil : hors espace, jamais synchronisées */
 const CLES_APPAREIL = new Set(["app:code", "app:espace", "app:espacesConnus"]);
 /* Rangées dans l'espace mais propres à l'appareil : jamais synchronisées */
@@ -1858,6 +1859,8 @@ export default function App() {
   const [espace, setEspace] = useState(null); // {id, nom} de l’espace ouvert
   const [espacesConnus, setEspacesConnus] = useState([]); // ouverts sur cet appareil
   const [listeEspaces, setListeEspaces] = useState(false); // panneau caché (triple tap)
+  const [codePartage, setCodePartage] = useState(null); // {code, nom, nbExos}
+  const [importOuvert, setImportOuvert] = useState(false);
   const vivantRef = useRef(true);
 
   async function afficherDonnees() {
@@ -1950,6 +1953,73 @@ export default function App() {
     setSyncEtat("ok");
     setVerrou(null);
     await afficherDonnees();
+  }
+
+  /* ---- partage d'un programme d'un espace à l'autre (copie par code) ---- */
+
+  /* on emporte les exercices maison utilisés, sinon le programme arrive troué */
+  async function partagerProgramme(id) {
+    const prog = programmesPerso.find((p) => p.id === id);
+    if (!prog) return { erreur: "programme introuvable" };
+    const utilises = new Set(prog.seances.flatMap((s) => s.exoIds));
+    const emportes = exosPerso.filter((e) => utilises.has(e.id));
+    let rep, corps = {};
+    try {
+      rep = await fetch(API_PARTAGE, {
+        method: "POST",
+        headers: entetesSync(true),
+        body: JSON.stringify({ action: "creer", programme: prog, exos: emportes }),
+      });
+      corps = await rep.json();
+    } catch (e) {
+      return { erreur: "Serveur injoignable — réessaie dans un instant." };
+    }
+    if (!rep.ok) return { erreur: corps.erreur || "Partage impossible." };
+    if (corps.sync === false) return { erreur: "La synchro doit être active pour partager." };
+    return { code: corps.code, nom: corps.nom, nbExos: emportes.length };
+  }
+
+  /* import : copie indépendante, avec les exercices maison manquants */
+  async function importerProgramme(code) {
+    let rep, corps = {};
+    try {
+      rep = await fetch(API_PARTAGE, {
+        method: "POST",
+        headers: entetesSync(true),
+        body: JSON.stringify({ action: "lire", code }),
+      });
+      corps = await rep.json();
+    } catch (e) {
+      return { erreur: "Serveur injoignable — réessaie dans un instant." };
+    }
+    if (rep.status === 404) return { erreur: "Code inconnu ou expiré." };
+    if (!rep.ok) return { erreur: corps.erreur || "Import impossible." };
+
+    const recu = corps.programme;
+    /* exercices maison absents ici : on les ajoute au catalogue */
+    const connus = new Set([...Object.keys(EXOS), ...exosPerso.map((e) => e.id)]);
+    const nouveaux = (recu.exos || []).filter((e) => e && e.id && !connus.has(e.id));
+    if (nouveaux.length) {
+      const listeExos = [...exosPerso, ...nouveaux];
+      setExosPerso(listeExos);
+      await ecrire("app:exosPerso", listeExos);
+    }
+
+    const id = `perso-${Date.now()}`;
+    const prog = {
+      id,
+      nom: recu.nom,
+      seances: recu.seances.map((s, i) => ({
+        nom: s.nom || `Séance ${i + 1}`,
+        exoIds: [...s.exoIds],
+        ...(s.tabata ? { tabata: s.tabata, rounds: s.rounds || {} } : {}),
+      })),
+    };
+    const liste = [...programmesPerso, prog];
+    setProgrammesPerso(liste);
+    await ecrire("app:programmesPerso", liste);
+    choisirMode(id);
+    return { ok: true, nom: prog.nom, nbExos: nouveaux.length };
   }
 
   /* trois appuis rapprochés sur l'haltère : panneau des espaces */
@@ -2668,6 +2738,8 @@ export default function App() {
                 surMajProfil={(patch) => majProfil(profil, patch)}
                 surSupprimerProfil={() => supprimerProfil(profil)}
                 surDefinirCode={definirCodeEspace}
+                surPartager={async (id) => setCodePartage(await partagerProgramme(id))}
+                surImporter={() => setImportOuvert(true)}
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
               />
@@ -2753,6 +2825,14 @@ export default function App() {
       )}
 
       {/* ---------- fête de fin de séance ---------- */}
+      {codePartage && (
+        <FeuilleCodePartage resultat={codePartage} surFermer={() => setCodePartage(null)} />
+      )}
+
+      {importOuvert && (
+        <FeuilleImport surImporter={importerProgramme} surFermer={() => setImportOuvert(false)} />
+      )}
+
       {listeEspaces && (
         <FeuilleEspaces
           espaces={espacesConnus}
@@ -2804,6 +2884,195 @@ export default function App() {
 /* ------------------------------------------------------------------ */
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
+
+/* Code de partage d'un programme : à transmettre à qui on veut */
+function FeuilleCodePartage({ resultat, surFermer }) {
+  useVerrouScroll();
+  const [copie, setCopie] = useState(false);
+
+  async function copier() {
+    try {
+      await navigator.clipboard.writeText(resultat.code);
+      setCopie(true);
+      setTimeout(() => setCopie(false), 2000);
+    } catch (e) {}
+  }
+
+  if (resultat.erreur) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+        <div
+          className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit text-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="font-extrabold text-base">Partage impossible</h3>
+          <p className="text-brume text-sm mt-2 leading-relaxed">{resultat.erreur}</p>
+          <button
+            onClick={surFermer}
+            className="mt-5 w-full h-14 rounded-2xl bg-carte2 text-douce font-bold active:scale-98 transi"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+            <Share2 size={20} className="text-accent transi" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base leading-tight truncate">{resultat.nom}</h3>
+            <p className="text-brume text-xs mt-0.5">Code de partage</p>
+          </div>
+        </div>
+
+        <p
+          className="mt-5 w-full rounded-2xl bg-carte2 text-center font-extrabold chiffres flex items-center justify-center"
+          style={{ height: 72, fontSize: 34, letterSpacing: 6 }}
+        >
+          {resultat.code}
+        </p>
+
+        <p className="text-brume text-xs mt-3 leading-relaxed">
+          Transmets ce code : depuis son espace, la personne le saisit dans{" "}
+          <strong className="text-douce">Mon programme → Importer</strong> et reçoit une copie
+          indépendante.
+          {resultat.nbExos > 0
+            ? ` Tes ${resultat.nbExos} exercice${resultat.nbExos > 1 ? "s" : ""} maison partent avec.`
+            : ""}{" "}
+          Le code reste valable 30 jours et ne donne accès qu’à ce programme.
+        </p>
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={copier}
+            className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi flex items-center justify-center gap-2"
+          >
+            {copie ? <Check size={18} strokeWidth={3} /> : <Copy size={18} />}
+            {copie ? "Copié !" : "Copier le code"}
+          </button>
+          <button
+            onClick={surFermer}
+            className="h-14 px-5 rounded-2xl bg-carte2 text-brume font-bold active:scale-95 transi"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* Saisie d'un code reçu : importe une copie du programme */
+function FeuilleImport({ surImporter, surFermer }) {
+  useVerrouScroll();
+  const [code, setCode] = useState("");
+  const [erreur, setErreur] = useState(null);
+  const [occupe, setOccupe] = useState(false);
+  const [fait, setFait] = useState(null);
+
+  async function valider(e) {
+    e.preventDefault();
+    if (code.trim().length < 4 || occupe) return;
+    setOccupe(true);
+    setErreur(null);
+    const r = await surImporter(code.trim().toUpperCase());
+    setOccupe(false);
+    if (r && r.erreur) setErreur(r.erreur);
+    else setFait(r);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {fait ? (
+          <div className="text-center">
+            <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
+              <Check size={30} strokeWidth={3} className="text-accent transi" />
+            </span>
+            <h3 className="mt-4 font-extrabold text-lg">{fait.nom}</h3>
+            <p className="text-brume text-sm mt-2 leading-relaxed">
+              Le programme est copié dans ton espace et déjà sélectionné.
+              {fait.nbExos > 0
+                ? ` ${fait.nbExos} exercice${fait.nbExos > 1 ? "s" : ""} maison ${
+                    fait.nbExos > 1 ? "ont" : "a"
+                  } rejoint ton catalogue.`
+                : ""}{" "}
+              Modifie-le comme tu veux : l’original n’en saura rien.
+            </p>
+            <button
+              onClick={surFermer}
+              className="mt-5 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
+            >
+              C’est parti
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+                <Download size={20} className="text-accent transi" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-extrabold text-base leading-tight">Importer un programme</h3>
+                <p className="text-brume text-xs mt-0.5">Avec le code reçu</p>
+              </div>
+              <button
+                onClick={surFermer}
+                aria-label="Fermer"
+                className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
+              >
+                <X size={18} className="text-brume" />
+              </button>
+            </div>
+            <form onSubmit={valider}>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="Ex. : 7K2MPQ"
+                autoComplete="off"
+                autoCapitalize="characters"
+                className="mt-4 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold chiffres outline-none placeholder-slate-600"
+                style={{ height: 60, fontSize: 26, letterSpacing: 4 }}
+                aria-label="Code de partage"
+              />
+              {erreur && <p className="text-rouge text-xs mt-3 text-center">{erreur}</p>}
+              <button
+                type="submit"
+                disabled={code.trim().length < 4 || occupe}
+                className={`mt-4 w-full h-14 rounded-2xl font-extrabold text-base transi ${
+                  code.trim().length < 4 || occupe
+                    ? "bg-carte2 text-brume"
+                    : "bg-accent text-accent-ink active:scale-98"
+                }`}
+              >
+                {occupe ? "Import en cours…" : "Importer"}
+              </button>
+            </form>
+            <p className="text-brume text-xs mt-3 leading-relaxed text-center">
+              Tu recevras une copie : la modifier ne touchera pas l’original.
+            </p>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 /* Panneau caché (trois appuis sur l'haltère) : bascule entre les espaces déjà
    ouverts sur ce téléphone. Rien n'est demandé au serveur pour l'afficher. */
@@ -2975,6 +3244,7 @@ function CarteProtection({ surDefinirCode }) {
 function VueSemaine({
   profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat, espace,
   surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surDefinirCode,
+  surPartager, surImporter,
   surCreer, surEditer,
 }) {
   const p = profilObj;
@@ -3063,23 +3333,43 @@ function VueSemaine({
                   </span>
                 </button>
                 {prog.perso && (
-                  <button
-                    onClick={() => surEditer(prog.id)}
-                    aria-label={`Modifier le programme ${prog.nom}`}
-                    className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 mr-1 active:scale-95 transi"
-                  >
-                    <Pencil size={16} className="text-brume" />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => surPartager(prog.id)}
+                      aria-label={`Partager le programme ${prog.nom}`}
+                      className="h-11 w-10 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transi"
+                    >
+                      <Share2 size={16} className="text-brume" />
+                    </button>
+                    <button
+                      onClick={() => surEditer(prog.id)}
+                      aria-label={`Modifier le programme ${prog.nom}`}
+                      className="h-11 w-10 rounded-xl flex items-center justify-center shrink-0 mr-1 active:scale-95 transi"
+                    >
+                      <Pencil size={16} className="text-brume" />
+                    </button>
+                  </>
                 )}
               </div>
             );
           })}
-          <button
-            onClick={surCreer}
-            className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-          >
-            <Plus size={17} /> Créer un programme
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={surCreer}
+              className="flex-1 h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+            >
+              <Plus size={17} /> Créer un programme
+            </button>
+            {syncEtat === "ok" && (
+              <button
+                onClick={surImporter}
+                aria-label="Importer un programme partagé"
+                className="h-12 px-4 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+              >
+                <Download size={16} /> Importer
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-brume text-xs mt-2 leading-relaxed">{progActuel.description}</p>
       </section>
