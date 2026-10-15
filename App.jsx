@@ -4034,6 +4034,7 @@ function VueAccueil({
     d.setDate(d.getDate() + i);
     return cleJour(d);
   });
+  const [jourOuvert, setJourOuvert] = useState(null); // date du jour touché
 
   return (
     <div key={profil} className="vue space-y-7">
@@ -4042,14 +4043,21 @@ function VueAccueil({
         <h1 className="titre-xl mt-1.5">Salut {nom}</h1>
         <p className="text-douce text-[15px] mt-2 leading-snug">{phrase}</p>
 
-        {/* la semaine en un coup d'œil */}
+        {/* la semaine en un coup d'œil : un tap sur un jour en montre le détail */}
         <div className="mt-5 grid grid-cols-7 gap-1">
           {jours.map((j, i) => {
             const n = stats.jours[j] || 0;
             const ajd = j === auj;
             const futur = j > auj;
             return (
-              <div key={j} className="flex flex-col items-center gap-1.5">
+              <button
+                key={j}
+                onClick={() => setJourOuvert(j)}
+                aria-label={`${FORMAT_JOUR.format(depuisCle(j))} : ${
+                  n ? `${n} séance${n > 1 ? "s" : ""}` : futur ? "à venir" : "aucune séance"
+                }`}
+                className="flex flex-col items-center gap-1.5 py-0.5 rounded-2xl active:scale-90 transi"
+              >
                 <span className={`text-[11px] font-semibold ${ajd ? "text-accent" : "text-sourd"}`}>{"LMMJVSD"[i]}</span>
                 <span
                   className={`h-9 w-9 rounded-full flex items-center justify-center text-[14px] font-bold chiffres transi ${
@@ -4059,10 +4067,21 @@ function VueAccueil({
                   {Number(j.slice(8))}
                 </span>
                 <span className={`h-1 w-1 rounded-full ${n > 1 ? "bg-accent" : "bg-transparent"}`} />
-              </div>
+              </button>
             );
           })}
         </div>
+        {jourOuvert && (
+          <FeuilleJour
+            iso={jourOuvert}
+            entrees={donnees.historique.filter((h) => h.d === jourOuvert)}
+            prochaine={prochaine}
+            enCours={!!enCours}
+            surCommencer={(id) => { setJourOuvert(null); surOuvrir(id); }}
+            surJournal={() => { setJourOuvert(null); surJournal(); }}
+            surFermer={() => setJourOuvert(null)}
+          />
+        )}
       </div>
 
       {/* la prochaine séance, en grand */}
@@ -4147,6 +4166,88 @@ function VueAccueil({
         </p>
       </Section>
     </div>
+  );
+}
+
+/* Détail d'un jour de la semaine (accueil) : les séances validées ce jour-là,
+   ou, pour aujourd'hui et les jours à venir, la prochaine séance au programme */
+function FeuilleJour({ iso, entrees, prochaine, enCours, surCommencer, surJournal, surFermer }) {
+  const auj = cleJour();
+  const date = depuisCle(iso);
+  const titre = FORMAT_JOUR.format(date).replace(/^./, (c) => c.toUpperCase());
+  const minutes = entrees.reduce((t, h) => t + (h.duree || 0), 0);
+  const kcal = entrees.reduce((t, h) => t + (h.kcal || 0), 0);
+  const sousTitre = entrees.length
+    ? [
+        `${entrees.length} séance${entrees.length > 1 ? "s" : ""}`,
+        minutes ? `${minutes} min` : null,
+        kcal ? `≈ ${kcal} kcal` : null,
+      ].filter(Boolean).join(" · ")
+    : iso === auj
+    ? "Aujourd’hui"
+    : iso > auj
+    ? "À venir"
+    : "Jour de repos";
+
+  return (
+    <Feuille titre={titre} sousTitre={sousTitre} icone={CalendarDays} surFermer={surFermer}>
+      {entrees.length > 0 ? (
+        <div className="space-y-3 max-h-[58vh] overflow-y-auto defile">
+          {entrees.map((h, i) => {
+            const infos = infosSeance(h);
+            return (
+              <div key={i} className="rounded-3xl surface-2 p-3.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-bold text-[15px] truncate">{decouperTitre(h.titre || "Séance")[1]}</span>
+                  <BadgesSeance h={h} />
+                </div>
+                {infos.length > 0 && <p className="text-brume text-xs mt-0.5 mb-2.5">{infos.join(" · ")}</p>}
+                <DetailSeance h={h} />
+              </div>
+            );
+          })}
+        </div>
+      ) : iso < auj ? (
+        <div className="rounded-3xl surface-2 p-5 flex gap-3.5 items-start">
+          <span className="h-10 w-10 rounded-full bg-carte3 flex items-center justify-center shrink-0">
+            <Moon size={18} className="text-douce" />
+          </span>
+          <p className="text-sm text-douce leading-relaxed">
+            Pas de séance ce jour-là. Le repos fait partie du programme : c’est pendant ces
+            jours-là que le muscle se reconstruit.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-3xl surface-2 p-4">
+          <p className="text-sm text-douce leading-relaxed">
+            {iso === auj
+              ? enCours
+                ? "Ta séance du jour est en cours."
+                : "Pas encore de séance aujourd’hui."
+              : prochaine
+              ? "Ce jour arrive bientôt. Prochaine séance au programme :"
+              : "Ce jour arrive bientôt. Ton objectif de la semaine est déjà atteint."}
+          </p>
+          {prochaine && (
+            <button
+              onClick={() => surCommencer(prochaine.id)}
+              className="mt-3 w-full h-[52px] rounded-2xl bg-accent text-accent-ink font-extrabold text-[15px] flex items-center justify-center gap-2 active:scale-98 transi"
+            >
+              <Play size={16} strokeWidth={2.6} className="fill-current" />
+              {enCours ? "Reprendre" : "Commencer"} · {decouperTitre(prochaine.titre)[1]}
+            </button>
+          )}
+        </div>
+      )}
+      {entrees.length > 0 && (
+        <button
+          onClick={surJournal}
+          className="mt-3 w-full h-12 rounded-2xl text-sm font-bold text-accent flex items-center justify-center gap-1.5 active:scale-98 transi"
+        >
+          Voir dans le journal <ChevronRight size={16} />
+        </button>
+      )}
+    </Feuille>
   );
 }
 
@@ -5076,6 +5177,72 @@ function CalendrierMois({ historique, mois, surMois }) {
   );
 }
 
+/* « 3 exos · 52 min · ≈ 290 kcal » */
+function infosSeance(h) {
+  return [
+    h.detail ? `${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : null,
+    h.duree ? `${h.duree} min` : null,
+    h.kcal ? `≈ ${h.kcal} kcal` : null,
+  ].filter(Boolean);
+}
+
+/* Exercices faits lors d'une séance validée : séries, charges, records */
+function DetailSeance({ h }) {
+  if (!h.detail || !h.detail.length) {
+    return (
+      <p className="text-brume text-xs leading-relaxed">
+        Détail non enregistré — les séances validées à partir de maintenant
+        garderont leurs exercices, séries et charges.
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-2xl bg-carte2 p-3 space-y-2">
+      {h.detail.map((dexo, j) => {
+        const ch = texteCharges(dexo);
+        /* charges différentes d'une série à l'autre : sur une 2e ligne */
+        const variees = ch.includes("/");
+        const record = h.records && h.records.includes(dexo.id);
+        return (
+          <div key={j}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[13px] font-bold text-douce truncate flex items-center gap-1.5">
+                {record && <Trophy size={12} className="text-or shrink-0" />}
+                {dexo.nom}
+              </span>
+              <span className="text-xs text-brume chiffres shrink-0">
+                {dexo.minutes
+                  ? `${dexo.minutes} min`
+                  : `${dexo.series} × ${dexo.reps}${ch && !variees ? ` · ${ch}` : ""}`}
+              </span>
+            </div>
+            {variees && <p className="text-xs text-brume chiffres text-right">{ch}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Badges d'une séance validée : record battu, validation automatique */
+function BadgesSeance({ h }) {
+  return (
+    <>
+      {h.records && h.records.length > 0 && (
+        <Trophy size={14} className="text-or shrink-0" aria-label="Record battu" />
+      )}
+      {h.auto && (
+        <span
+          className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-carte2 text-brume shrink-0"
+          title="Validée automatiquement : la séance avait été commencée puis oubliée"
+        >
+          auto
+        </span>
+      )}
+    </>
+  );
+}
+
 function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
   const [deplie, setDeplie] = useState(null);
   const [mois, setMois] = useState(() => {
@@ -5144,11 +5311,7 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                 const cle = `${semaine}-${h.s}-${h.d}-${i}`;
                 const ouvert = deplie === cle;
                 const date = depuisCle(h.d);
-                const infos = [
-                  h.detail ? `${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : null,
-                  h.duree ? `${h.duree} min` : null,
-                  h.kcal ? `≈ ${h.kcal} kcal` : null,
-                ].filter(Boolean);
+                const infos = infosSeance(h);
                 return (
                   <div key={cle} className="surface rounded-3xl overflow-hidden">
                     <div className="p-3 pl-3.5 flex items-center gap-2">
@@ -5165,17 +5328,7 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                         <span className="flex-1 min-w-0">
                           <span className="flex items-center gap-1.5 min-w-0">
                             <span className="font-bold text-[15px] truncate">{titreDe(h)}</span>
-                            {h.records && h.records.length > 0 && (
-                              <Trophy size={14} className="text-or shrink-0" aria-label="Record battu" />
-                            )}
-                            {h.auto && (
-                              <span
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-carte2 text-brume shrink-0"
-                                title="Validée automatiquement : la séance avait été commencée puis oubliée"
-                              >
-                                auto
-                              </span>
-                            )}
+                            <BadgesSeance h={h} />
                           </span>
                           <span className="text-brume text-xs block mt-0.5 truncate">{infos.join(" · ")}</span>
                         </span>
@@ -5184,37 +5337,7 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                     </div>
                     {ouvert && (
                       <div className="px-3.5 pb-3.5 deplie">
-                        {h.detail && h.detail.length ? (
-                          <div className="rounded-2xl bg-carte2 p-3 space-y-2">
-                            {h.detail.map((dexo, j) => {
-                              const ch = texteCharges(dexo);
-                              /* charges différentes d'une série à l'autre : sur une 2e ligne */
-                              const variees = ch.includes("/");
-                              const record = h.records && h.records.includes(dexo.id);
-                              return (
-                                <div key={j}>
-                                  <div className="flex items-baseline justify-between gap-3">
-                                    <span className="text-[13px] font-bold text-douce truncate flex items-center gap-1.5">
-                                      {record && <Trophy size={12} className="text-or shrink-0" />}
-                                      {dexo.nom}
-                                    </span>
-                                    <span className="text-xs text-brume chiffres shrink-0">
-                                      {dexo.minutes
-                                        ? `${dexo.minutes} min`
-                                        : `${dexo.series} × ${dexo.reps}${ch && !variees ? ` · ${ch}` : ""}`}
-                                    </span>
-                                  </div>
-                                  {variees && <p className="text-xs text-brume chiffres text-right">{ch}</p>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-brume text-xs leading-relaxed">
-                            Détail non enregistré — les séances validées à partir de maintenant
-                            garderont leurs exercices, séries et charges.
-                          </p>
-                        )}
+                        <DetailSeance h={h} />
                         <div className="mt-3 flex items-center gap-2 pl-1">
                           <span className="flex-1 text-xs text-sourd">Validée par erreur ?</span>
                           <BoutonSuppression
