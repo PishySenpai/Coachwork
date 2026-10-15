@@ -34,7 +34,7 @@ const corps = `<title>Coachwork — Programme duo</title>
 writeFileSync("artifact.html", corps);
 
 // Version déployée : mêmes contenus + en-têtes PWA (manifest, icônes, service worker)
-const tetePWA = `<meta name="theme-color" content="#0B0F14">
+const tetePWA = `<meta name="theme-color" content="#08090C">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icone-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">

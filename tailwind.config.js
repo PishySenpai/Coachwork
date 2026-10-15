@@ -3,16 +3,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        fond: "#0B0F14",
-        carte: "#161C24",
-        carte2: "#212A36",
-        encre: "#E9EEF4",
-        brume: "#8E9AAB",
-        douce: "#C2CBD8",
-        ligne: "rgba(148,163,184,0.14)",
+        fond: "#08090C",
+        carte: "#121419",
+        carte2: "#1B1E25",
+        carte3: "#252932",
+        encre: "#F3F5F8",
+        douce: "#C7CCD5",
+        brume: "#8B92A0",
+        sourd: "#5E6571",
+        ligne: "rgba(255,255,255,0.07)",
       },
       fontFamily: {
         jakarta: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
+      },
+      borderRadius: {
+        "4xl": "28px",
       },
       scale: {
         98: "0.98",

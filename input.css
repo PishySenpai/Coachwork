@@ -3,35 +3,43 @@
 @tailwind utilities;
 
 /* ---------- thème & accents par profil ---------- */
-:root {
+/* lime redéfini explicitement : un élément marqué lime (écran d'entrée,
+   avatar, pastille) le reste même à l'intérieur d'un profil d'une autre couleur */
+:root,
+[data-accent="lime"] {
   --accent: #a3e635;
   --accent-ink: #131a05;
   --accent-soft: rgba(163, 230, 53, 0.13);
   --accent-bordure: rgba(163, 230, 53, 0.35);
+  --accent-halo: rgba(163, 230, 53, 0.16);
 }
 [data-accent="corail"] {
   --accent: #fb7185;
   --accent-ink: #2b070d;
   --accent-soft: rgba(251, 113, 133, 0.14);
   --accent-bordure: rgba(251, 113, 133, 0.4);
+  --accent-halo: rgba(251, 113, 133, 0.17);
 }
 [data-accent="azur"] {
   --accent: #38bdf8;
   --accent-ink: #04202e;
   --accent-soft: rgba(56, 189, 248, 0.14);
   --accent-bordure: rgba(56, 189, 248, 0.4);
+  --accent-halo: rgba(56, 189, 248, 0.17);
 }
 [data-accent="turquoise"] {
   --accent: #2dd4bf;
   --accent-ink: #032420;
   --accent-soft: rgba(45, 212, 191, 0.14);
   --accent-bordure: rgba(45, 212, 191, 0.4);
+  --accent-halo: rgba(45, 212, 191, 0.16);
 }
 [data-accent="violet"] {
   --accent: #c084fc;
   --accent-ink: #240b38;
   --accent-soft: rgba(192, 132, 252, 0.15);
   --accent-bordure: rgba(192, 132, 252, 0.42);
+  --accent-halo: rgba(192, 132, 252, 0.18);
 }
 /* pastilles de choix de couleur (aperçu indépendant de l'accent actif) */
 .pastille-lime { background-color: #a3e635; }
@@ -41,14 +49,31 @@
 .pastille-violet { background-color: #c084fc; }
 
 html {
-  background: #0b0f14;
+  background: #08090c;
+  color-scheme: dark;
 }
 body {
-  background: #0b0f14;
-  color: #e9eef4;
+  background: #08090c;
+  color: #f3f5f8;
   margin: 0;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+}
+
+/* halo d'ambiance : une lueur de la couleur du profil en haut de l'écran */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 420px;
+  background: radial-gradient(120% 70% at 50% -20%, var(--accent-halo), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  transition: background 0.4s ease;
+}
+#root {
+  position: relative;
+  z-index: 1;
 }
 
 /* Coquille applicative : le document ne défile jamais (fini le rebond iOS
@@ -69,6 +94,11 @@ html, body {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   padding-top: env(safe-area-inset-top, 0px);
+  scrollbar-width: none;
+}
+.coquille::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 @supports (height: 100dvh) {
   .coquille {
@@ -94,12 +124,82 @@ body.fige .coquille {
   height: 0;
 }
 
-/* barre flottante du minuteur : au-dessus du home indicator iPhone */
+/* ---------- surfaces ---------- */
+/* carte : surface pleine + liseré lumineux en haut, sans bordure dure */
+.surface {
+  background-color: #121419;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+.surface-2 {
+  background-color: #1b1e25;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+/* verre dépoli : barres flottantes (navigation, minuteur, actions) */
+.verre {
+  background: rgba(18, 20, 25, 0.78);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+/* carte « héros » : dégradé de la couleur du profil dans le coin */
+.degrade-heros {
+  background:
+    radial-gradient(110% 90% at 100% 0%, var(--accent-halo), transparent 62%),
+    radial-gradient(80% 70% at 0% 100%, rgba(255, 255, 255, 0.025), transparent 60%),
+    #13161b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.lueur-accent {
+  box-shadow: 0 10px 28px -8px var(--accent-bordure);
+}
+
+/* ---------- typographie ---------- */
+.titre-xl {
+  font-size: 34px;
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.titre-l {
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.chiffre-xl {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- barres flottantes ---------- */
+/* navigation du bas : flottante, au-dessus du home indicator */
+.nav-bas {
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+}
+/* barre d'action de la séance : collée en bas, safe area comprise */
+.barre-action {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+/* minuteur de repos : au-dessus de la navigation ou de la barre d'action */
 .barre-flottante {
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 .coussin-bas {
-  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(1.75rem + env(safe-area-inset-bottom, 0px));
+}
+/* en-tête de séance collant : couvre aussi la zone de la barre d'état */
+.entete-collante {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  background: linear-gradient(to bottom, rgba(8, 9, 12, 0.96) 70%, rgba(8, 9, 12, 0));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 /* message éphémère : sous l'encoche / la barre d'état */
@@ -107,7 +207,15 @@ body.fige .coquille {
   top: calc(0.75rem + env(safe-area-inset-top, 0px));
 }
 .ombre-toast {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 16px 36px rgba(0, 0, 0, 0.55);
+}
+
+/* poignée des feuilles du bas */
+.poignee {
+  width: 38px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 /* roue de sélection (façon iOS) : défilement aimanté, scrollbar masquée */
@@ -131,14 +239,14 @@ body.fige .coquille {
   scroll-snap-align: center;
   font-size: 22px;
   font-weight: 600;
-  color: #66748a;
+  color: #5e6571;
   cursor: pointer;
   overflow: hidden;
   padding: 0 6px;
   transition: color 0.15s ease;
 }
 .roue-active {
-  color: #e9eef4;
+  color: #f3f5f8;
   font-weight: 800;
 }
 
@@ -147,41 +255,50 @@ body.fige .coquille {
 .text-accent-ink { color: var(--accent-ink); }
 .bg-accent-soft { background-color: var(--accent-soft); }
 .stroke-accent { stroke: var(--accent); }
-.stroke-carte2 { stroke: #212a36; }
+.stroke-carte2 { stroke: #1b1e25; }
+.stroke-piste { stroke: rgba(255, 255, 255, 0.07); }
+.fill-accent { fill: var(--accent); }
 .bordure-accent-douce { border-color: var(--accent-bordure); }
+.anneau-accent { box-shadow: 0 0 0 2px #08090c, 0 0 0 4px var(--accent); }
+.contour-accent { box-shadow: inset 0 0 0 1.5px var(--accent-bordure); }
 .encre-sur-accent { background-color: var(--accent-ink); color: var(--accent); }
 
 .chiffres { font-variant-numeric: tabular-nums; }
 
 /* rouge sémantique (suppression), distinct des accents de profil */
-.bg-rouge-doux { background-color: rgba(248, 113, 113, 0.15); }
+.bg-rouge-doux { background-color: rgba(248, 113, 113, 0.14); }
 .text-rouge { color: #f87171; }
+/* or sémantique (records) */
+.text-or { color: #fbbf24; }
+.bg-or-doux { background-color: rgba(251, 191, 36, 0.14); }
 
 /* schéma musculaire */
-.schema-base { fill: #28323f; }
+.schema-base { fill: #262a33; }
 .schema-actif { fill: var(--accent); transition: fill 0.2s ease; }
-.schema-texte { fill: #66748a; font-size: 10px; font-weight: 600; }
+.schema-texte { fill: #5e6571; font-size: 10px; font-weight: 600; }
 
 /* courbe de progression des charges */
-.grille-progres { stroke: rgba(148, 163, 184, 0.12); stroke-width: 1; }
-.axe-progres { fill: #66748a; font-size: 10px; }
-.aire-progres { fill: var(--accent); opacity: 0.12; }
-.ligne-progres { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.point-progres { fill: var(--accent); }
+.grille-progres { stroke: rgba(255, 255, 255, 0.06); stroke-width: 1; stroke-dasharray: 3 4; }
+.axe-progres { fill: #5e6571; font-size: 10px; }
+.aire-progres { fill: url(#degrade-courbe); }
+.ligne-progres { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.point-progres { fill: #08090c; stroke: var(--accent); stroke-width: 2; }
+.point-final { fill: var(--accent); }
 .valeur-progres { fill: var(--accent); font-size: 11px; font-weight: 800; }
+.stop-accent { stop-color: var(--accent); }
 
 /* ---------- transitions & animations ---------- */
 .transi {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
-    transform 0.15s ease, opacity 0.2s ease, stroke 0.2s ease;
+    transform 0.15s ease, opacity 0.2s ease, stroke 0.2s ease, box-shadow 0.2s ease;
 }
 
 .anneau {
-  transition: stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.2s ease;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.2s ease;
 }
 
 .barre {
-  transition: width 0.4s ease, height 0.5s ease, background-color 0.2s ease;
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1), height 0.5s ease, background-color 0.2s ease;
 }
 
 @keyframes pop {
@@ -192,26 +309,40 @@ body.fige .coquille {
 .pop { animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 @keyframes apparait {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 /* backwards (pas both) : ne retient aucun transform après l'animation,
    sinon WebKit fait de la vue le référentiel des position:fixed internes */
-.vue { animation: apparait 0.25s ease-out backwards; }
+.vue { animation: apparait 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
+@keyframes deplie {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.deplie { animation: deplie 0.22s ease-out backwards; }
 
 @keyframes surgit {
-  from { opacity: 0; transform: scale(0.88) translateY(14px); }
+  from { opacity: 0; transform: scale(0.9) translateY(14px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-.surgit { animation: surgit 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+.surgit { animation: surgit 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) backwards; }
+
+/* feuille du bas : montée avec un léger rebond */
+@keyframes monte {
+  from { transform: translateY(105%); }
+  to { transform: translateY(0); }
+}
+.feuille { animation: monte 0.34s cubic-bezier(0.32, 1.25, 0.5, 1) backwards; }
 
 @keyframes voile {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 .voile {
-  background: rgba(4, 7, 10, 0.78);
-  backdrop-filter: blur(6px);
+  background: rgba(3, 4, 6, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: voile 0.2s ease-out both;
 }
 
@@ -220,6 +351,19 @@ body.fige .coquille {
   50% { opacity: 0.55; transform: scale(0.92); }
 }
 .pulsation { animation: pulsation 1.3s ease-in-out infinite; }
+
+@keyframes battement {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-bordure); }
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+.battement { animation: battement 1.8s ease-in-out infinite; }
+
+/* éclats de la fête de fin de séance */
+@keyframes eclat {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+.eclat { animation: eclat 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
 
 :focus-visible {
   outline: 2px solid var(--accent);

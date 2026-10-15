@@ -15,6 +15,24 @@ npx http-server dist -c-1
 - Persistance : `window.storage` → repli IndexedDB → mémoire. Jamais localStorage.
 - `node serveur-e2e.mjs` sert `dist/` **et** les fonctions `api/` avec un Redis simulé (port 4531) : pratique pour tester la synchro, les espaces et les codes sans rien déployer.
 
+## Interface
+
+Navigation par une barre flottante en bas (à portée de pouce), cinq onglets :
+
+- **Accueil** : la semaine en un coup d'œil (jours faits), la prochaine séance en grand
+  (« Commencer » / « Reprendre »), les chiffres de la semaine et la liste des séances.
+- **Programmes** : le programme actif, les vôtres, ceux du coach ; créer, importer,
+  partager, corbeille.
+- **Progrès** : séances, énergie et volume soulevé sur 30 jours, assiduité sur 8 semaines,
+  records personnels, courbe de charge par exercice.
+- **Journal** : calendrier du mois et détail de chaque séance (durée, charges, records).
+- **Profil** : repères, niveau, couleur, espace et code, conseils du coach, profils.
+
+Les profils se changent d'un tap sur les avatars en haut à droite ; la couleur du profil
+teinte toute l'interface. En séance, l'exercice en cours est déplié et les autres repliés
+avec leur résumé ; un chrono mesure la durée réelle, et les records battus sont fêtés à la
+validation.
+
 ## En séance
 
 - **Une charge par série** : chaque exercice affiche un tableau série / charge / reps / fait.
@@ -46,7 +64,7 @@ volume viennent des recommandations de l'OMS (2020).
 ## Corbeille
 
 Supprimer un programme le met à la corbeille (bouton **Annuler** pendant quelques secondes,
-puis **Mon programme → Corbeille**). Il y reste 3 jours, restaurable avec ses séances en
+puis **Programmes → Corbeille**). Il y reste 3 jours, restaurable avec ses séances en
 cours, puis s'efface tout seul.
 
 ## Déploiement
@@ -82,7 +100,7 @@ Au premier lancement, l'app crée automatiquement l'espace **Principal** à part
 déjà en place. Les téléphones déjà installés l'adoptent tout seuls : rien à ressaisir.
 
 - Si la variable `COACHWORK_CODE` existe, cet espace prend ce code.
-- Sinon il reste **sans code** (comportement historique) et l'app propose, dans *Ma semaine*,
+- Sinon il reste **sans code** (comportement historique) et l'app propose, dans *Profil → Espace*,
   un bouton **Protéger par un code** pour en poser un sans passer par Vercel.
 
 Le code d'un espace se change ensuite depuis l'app (l'ancien code est exigé).
@@ -93,7 +111,7 @@ Il ouvre **votre URL**, crée son propre espace (nom + code de son choix) et c'e
 Ses données sont totalement séparées des vôtres — plus besoin de forker ni de déployer.
 
 Dans son espace, il compose ses profils librement (bouton **+ Profil**) : prénom, couleur,
-et surtout un **niveau de charges** dans *Mes repères* — Standard, ou Tout en douceur
+et surtout un **niveau de charges** dans *Profil* — Standard, ou Tout en douceur
 (charges plus légères, articulations ménagées). Ce niveau pilote les charges conseillées
 affichées sur chaque exercice.
 
@@ -103,8 +121,8 @@ Ne partagez le code d'un espace qu'avec les gens qui doivent y écrire.
 
 Les programmes sont rangés dans l'espace, donc invisibles ailleurs. Pour en passer un à quelqu'un :
 
-1. Dans **Mon programme**, l'icône de partage sur un programme perso génère un **code à 6 caractères**.
-2. La personne saisit ce code dans son espace (**Mon programme → Importer**).
+1. Dans **Programmes**, l'icône de partage sur un programme perso génère un **code à 6 caractères**.
+2. La personne saisit ce code dans son espace (**Programmes → Importer**).
 3. Elle reçoit une **copie indépendante** : la modifier ne touche pas l'original, et inversement.
 
 Les exercices maison utilisés par le programme voyagent avec lui (sinon il arriverait troué).

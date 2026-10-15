@@ -3,9 +3,10 @@ import { createPortal } from "react-dom";
 import {
   Dumbbell, Check, ChevronLeft, ChevronDown, Flame, Timer, HeartPulse,
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
-  Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
+  Stethoscope, Scale, Cloud, CloudOff, Pencil, Trash2, Search,
   ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause, Share2, Download,
-  RotateCcw,
+  RotateCcw, House, LayoutList, CalendarDays, CircleUser, Trophy, Zap, Weight, Activity,
+  ArrowUpDown, ChevronRight, LogOut, Clock, Info, CalendarCheck, Users, UserPlus,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -1778,7 +1779,7 @@ function normaliserSeance(brut) {
       ordre: brut.ordre || [],
       chargesSeries: brut.chargesSeries || {},
       durees: brut.durees || {},
-      ...(brut.debut ? { debut: brut.debut, maj: brut.maj || 0 } : {}),
+      ...(brut.debut ? { debut: brut.debut, maj: brut.maj || 0, ...(brut.t0 ? { t0: brut.t0 } : {}) } : {}),
     };
   return { ...seanceVierge(), coches: brut };
 }
@@ -1988,6 +1989,42 @@ function chargesApres(charges, detail) {
   return maj;
 }
 
+/* Durée réelle d'une séance (de la première action à la fin), en minutes.
+   Rien en dessous de 5 min ou au-delà de 4 h : la mesure n'aurait pas de sens. */
+function dureeSeance(et, fin) {
+  if (!et.t0) return null;
+  const min = Math.round((fin - et.t0) / 60000);
+  return min >= 5 && min <= 240 ? min : null;
+}
+
+/* Records battus : charge plus lourde que tout ce qui a été noté avant sur
+   l'exercice (un premier passage n'est pas un record, il n'y a rien à battre) */
+function recordsBattus(detail, historique) {
+  const max = {};
+  for (const h of historique) {
+    for (const d of h.detail || []) {
+      const c = parseCharge(d.charge);
+      if (c != null && (max[d.id] == null || c > max[d.id])) max[d.id] = c;
+    }
+  }
+  return detail
+    .filter((d) => {
+      const c = parseCharge(d.charge);
+      return c != null && max[d.id] != null && c > max[d.id];
+    })
+    .map((d) => ({ id: d.id, nom: d.nom, charge: d.charge, gain: formatKg(parseCharge(d.charge) - max[d.id]) }));
+}
+
+/* Volume soulevé d'un exercice fait (kg) : Σ charge × répétitions par série */
+function volumeExo(dexo) {
+  const reps = parseInt(String(dexo.reps || ""), 10);
+  if (!reps || dexo.minutes) return 0;
+  const charges = Array.isArray(dexo.charges) && dexo.charges.length
+    ? dexo.charges
+    : Array.from({ length: dexo.series || 0 }, () => dexo.charge);
+  return charges.reduce((tot, c) => tot + (parseCharge(c) || 0) * reps, 0);
+}
+
 async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
   const exosPerso = (await lire("app:exosPerso")) || [];
@@ -2037,89 +2074,145 @@ async function chargerTout() {
 /* Petits composants                                                   */
 /* ------------------------------------------------------------------ */
 
-function CaseCoche({ coche, surClic }) {
+/* Case à cocher ronde (étapes, exercices) */
+function CaseCoche({ coche, surClic, taille = 44, etiquette }) {
   return (
     <button
       onClick={surClic}
       aria-pressed={coche}
-      aria-label={coche ? "Marquer comme à faire" : "Marquer comme fait"}
-      className={`h-12 w-12 shrink-0 rounded-full border-2 flex items-center justify-center transi ${
-        coche ? "bg-accent border-transparent" : "border-slate-600 bg-transparent active:scale-95"
-      }`}
+      aria-label={etiquette || (coche ? "Marquer comme à faire" : "Marquer comme fait")}
+      className="shrink-0 flex items-center justify-center"
+      style={{ height: taille, width: taille }}
     >
-      {coche && <Check className="pop text-accent-ink" size={26} strokeWidth={3.5} />}
+      <span
+        className={`rounded-full flex items-center justify-center transi ${
+          coche ? "bg-accent" : "border-2 border-carte3 active:scale-90"
+        }`}
+        style={{ height: taille - 8, width: taille - 8 }}
+      >
+        {coche && <Check className="pop text-accent-ink" size={Math.round(taille * 0.42)} strokeWidth={3.5} />}
+      </span>
     </button>
   );
 }
 
-function Anneau({ fait, total }) {
-  const R = 48;
+/* Anneau de progression (semaine, repos, fête, tabata) */
+function Anneau({ fait, total, taille = 112, epaisseur = 10, children }) {
+  const R = (taille - epaisseur) / 2;
   const C = 2 * Math.PI * R;
-  const frac = total ? Math.min(fait / total, 1) : 0;
+  const frac = total ? Math.max(0, Math.min(fait / total, 1)) : 0;
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 112 112" className="h-28 w-28 -rotate-90">
-        <circle cx="56" cy="56" r={R} fill="none" strokeWidth="10" className="stroke-carte2" />
+    <div className="relative shrink-0" style={{ width: taille, height: taille }}>
+      <svg viewBox={`0 0 ${taille} ${taille}`} width={taille} height={taille} className="-rotate-90">
+        <circle cx={taille / 2} cy={taille / 2} r={R} fill="none" strokeWidth={epaisseur} className="stroke-piste" />
         <circle
-          cx="56" cy="56" r={R} fill="none" strokeWidth="10" strokeLinecap="round"
+          cx={taille / 2} cy={taille / 2} r={R} fill="none" strokeWidth={epaisseur} strokeLinecap="round"
           className="stroke-accent anneau"
           strokeDasharray={C}
           strokeDashoffset={C * (1 - frac)}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-extrabold chiffres leading-none">
-          {fait}<span className="text-brume text-base font-bold">/{total}</span>
-        </span>
-        <span className="text-brume mt-1 text-xs">séances</span>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
+    </div>
+  );
+}
+
+/* Séances par semaine : une barre par semaine, l'objectif en pointillé ;
+   les semaines où l'objectif est atteint sont en pleine couleur */
+function Barres({ barres, objectif = 3 }) {
+  const max = Math.max(objectif, ...barres.map((b) => b.n), 1);
+  const H = 96;
+  return (
+    <div className="relative">
+      <div
+        className="absolute left-0 right-0 border-t border-dashed border-carte3"
+        style={{ bottom: 22 + (objectif / max) * H }}
+        aria-hidden="true"
+      />
+      <div className="flex items-end gap-2">
+        {barres.map((b, i) => {
+          const actuelle = i === barres.length - 1;
+          return (
+            <div key={b.semaine} className="flex-1 flex flex-col items-center gap-1.5">
+              <span className={`text-[11px] chiffres font-bold ${b.n ? "text-douce" : "text-transparent"}`}>{b.n}</span>
+              <div className="w-full flex items-end" style={{ height: H }}>
+                <div
+                  className={`w-full rounded-[7px] barre ${b.n ? "bg-accent" : "bg-carte2"}`}
+                  style={{
+                    height: b.n ? `${(b.n / max) * 100}%` : 6,
+                    opacity: b.n && b.n < objectif ? 0.42 : 1,
+                  }}
+                />
+              </div>
+              <span className={`text-[10px] chiffres ${actuelle ? "text-douce font-bold" : "text-sourd"}`}>
+                {b.semaine.slice(8, 10)}/{b.semaine.slice(5, 7)}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function Barres({ barres }) {
+/* Titre de section, avec une action éventuelle à droite */
+function Section({ titre, action, surAction, children, className = "" }) {
   return (
-    <div>
-      <div className="flex items-end gap-2" style={{ height: 72 }}>
-        {barres.map((b) => (
-          <div key={b.semaine} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
-            <span className={`text-xs chiffres leading-none ${b.n > 0 ? "text-accent font-bold" : "text-transparent"}`}>
-              {b.n}
-            </span>
-            <div className="w-full flex items-end" style={{ height: 44 }}>
-              <div
-                className={`w-full rounded-t barre ${b.n > 0 ? "bg-accent" : "bg-carte2"}`}
-                style={{ height: b.n > 0 ? `${(Math.min(b.n, 3) / 3) * 100}%` : 5 }}
-              />
-            </div>
-            <span className="text-brume chiffres" style={{ fontSize: 10 }}>
-              {b.semaine.slice(8, 10)}/{b.semaine.slice(5, 7)}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="text-brume mt-2 text-center text-xs">Séances par semaine · 6 dernières semaines</p>
-    </div>
+    <section className={className}>
+      {titre && (
+        <div className="flex items-baseline justify-between gap-3 mb-2.5 px-1">
+          <h2 className="text-[15px] font-bold tracking-tight">{titre}</h2>
+          {action && (
+            <button onClick={surAction} className="text-[13px] font-bold text-accent transi active:opacity-70">
+              {action}
+            </button>
+          )}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+/* Ligne de réglage façon iOS : icône, libellé, valeur ou contrôle à droite */
+function Ligne({ icone: Icone, libelle, detail, children, surClic, danger }) {
+  const Balise = surClic ? "button" : "div";
+  return (
+    <Balise
+      onClick={surClic}
+      className={`w-full flex items-center gap-3 px-4 min-h-[56px] py-2.5 text-left ${surClic ? "active:bg-carte2 transi" : ""}`}
+    >
+      {Icone && (
+        <span className={`h-8 w-8 rounded-[10px] flex items-center justify-center shrink-0 ${danger ? "bg-rouge-doux" : "bg-carte2"}`}>
+          <Icone size={16} className={danger ? "text-rouge" : "text-douce"} />
+        </span>
+      )}
+      <span className="flex-1 min-w-0">
+        <span className={`block text-[15px] font-semibold ${danger ? "text-rouge" : ""}`}>{libelle}</span>
+        {detail && <span className="block text-xs text-brume mt-0.5 leading-snug">{detail}</span>}
+      </span>
+      {children}
+    </Balise>
   );
 }
 
 function Accordeon({ icone: Icone, titre, texte, accent }) {
   const [ouvert, setOuvert] = useState(false);
   return (
-    <div className={`rounded-2xl border bg-carte overflow-hidden ${accent ? "bordure-accent-douce" : "border-ligne"}`}>
+    <div>
       <button
         onClick={() => setOuvert(!ouvert)}
-        className="w-full flex items-center gap-3 p-4 text-left min-h-14"
+        className="w-full flex items-center gap-3 px-4 min-h-[56px] py-2.5 text-left active:bg-carte2 transi"
         aria-expanded={ouvert}
       >
-        <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-          <Icone size={20} className="text-accent transi" />
+        <span className={`h-8 w-8 rounded-[10px] flex items-center justify-center shrink-0 transi ${accent ? "bg-accent-soft" : "bg-carte2"}`}>
+          <Icone size={16} className={accent ? "text-accent" : "text-douce"} />
         </span>
-        <span className="flex-1 font-bold text-base">{titre}</span>
-        <ChevronDown size={20} className={`text-brume shrink-0 transi ${ouvert ? "rotate-180" : ""}`} />
+        <span className="flex-1 font-semibold text-[15px]">{titre}</span>
+        <ChevronDown size={18} className={`text-sourd shrink-0 transi ${ouvert ? "rotate-180" : ""}`} />
       </button>
       {ouvert && (
-        <div className="px-4 pb-4 vue space-y-2">
+        <div className="px-4 pb-4 pl-[60px] deplie space-y-2">
           {texte.map((p, i) => (
             <p key={i} className="text-sm leading-relaxed text-douce">{p}</p>
           ))}
@@ -2129,7 +2222,6 @@ function Accordeon({ icone: Icone, titre, texte, accent }) {
   );
 }
 
-/* Écran de verrouillage — code d'accès */
 /* Écran d'entrée : rejoindre un espace existant ou en créer un.
    Un espace = un groupe (un duo, une bande de potes) avec ses données à lui. */
 function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
@@ -2141,25 +2233,28 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
   const pret = nom.trim().length > 0 && (!creation || code.trim().length >= 4);
 
   return (
-    <div data-accent="lime" className="coquille bg-fond text-encre font-jakarta flex items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-7 vue">
-        <span className="mx-auto h-16 w-16 rounded-2xl bg-accent flex items-center justify-center">
-          <Dumbbell size={30} className="text-accent-ink" strokeWidth={2.5} />
-        </span>
-        <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-center">Coachwork</h1>
-        <p className="text-brume text-sm mt-2 leading-relaxed text-center">
+    <div data-accent="lime" className="coquille bg-fond text-encre font-jakarta">
+      <div className="min-h-full flex flex-col justify-center px-6 py-10 mx-auto max-w-sm vue">
+        <div className="relative mx-auto">
+          <div className="absolute inset-0 rounded-[26px] bg-accent blur-2xl opacity-30" aria-hidden="true" />
+          <span className="relative h-[76px] w-[76px] rounded-[26px] bg-accent flex items-center justify-center">
+            <Dumbbell size={34} className="text-accent-ink" strokeWidth={2.4} />
+          </span>
+        </div>
+        <h1 className="mt-7 titre-xl text-center">Coachwork</h1>
+        <p className="text-brume text-[15px] mt-3 leading-relaxed text-center">
           {creation
             ? "Choisis un nom d’espace et un code : tes potes entreront avec ces deux-là."
             : "Entre le nom de ton espace et son code pour retrouver tes séances."}
         </p>
 
-        <div className="mt-5 grid grid-cols-2 gap-1 rounded-2xl bg-carte2 p-1">
+        <div className="mt-8 grid grid-cols-2 gap-1 rounded-2xl bg-carte p-1">
           {[["rejoindre", "Rejoindre"], ["creer", "Créer"]].map(([id, libelle]) => (
             <button
               key={id}
               onClick={() => setMode(id)}
-              className={`h-10 rounded-xl text-sm font-bold transi ${
-                mode === id ? "bg-accent text-accent-ink" : "text-brume"
+              className={`h-11 rounded-xl text-sm font-bold transi ${
+                mode === id ? "bg-carte3 text-encre" : "text-brume"
               }`}
             >
               {libelle}
@@ -2173,6 +2268,7 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
             if (!pret || occupe) return;
             (creation ? surCreer : surOuvrir)(nom.trim(), code.trim());
           }}
+          className="mt-4 space-y-2.5"
         >
           <input
             type="text"
@@ -2180,8 +2276,8 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
             onChange={(e) => setNom(e.target.value)}
             placeholder="Nom de l’espace (ex. : Team Kevin)"
             autoComplete="off"
-            className="mt-4 w-full rounded-2xl bg-carte2 px-4 text-center font-bold outline-none placeholder-slate-600"
-            style={{ height: 52 }}
+            className="w-full rounded-2xl bg-carte px-5 text-[16px] font-semibold outline-none placeholder-sourd focus:bg-carte2 transi"
+            style={{ height: 56 }}
             aria-label="Nom de l’espace"
           />
           <input
@@ -2190,24 +2286,24 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
             onChange={(e) => setCode(e.target.value)}
             placeholder={creation ? "Code à créer (4 caractères min.)" : "Code de l’espace"}
             autoComplete="off"
-            className="mt-2 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold text-lg outline-none placeholder-slate-600"
-            style={{ height: 52 }}
+            className="w-full rounded-2xl bg-carte px-5 text-[16px] font-semibold outline-none placeholder-sourd focus:bg-carte2 transi"
+            style={{ height: 56 }}
             aria-label="Code de l’espace"
           />
-          {erreur && <p className="text-rouge text-xs mt-3 text-center">{erreur}</p>}
+          {erreur && <p className="text-rouge text-sm pt-1 text-center">{erreur}</p>}
           <button
             type="submit"
             disabled={!pret || occupe}
-            className={`mt-4 w-full rounded-2xl font-extrabold text-base transi ${
-              !pret || occupe ? "bg-carte2 text-brume" : "bg-accent text-accent-ink active:scale-98"
+            className={`!mt-5 w-full rounded-2xl font-extrabold text-base transi ${
+              !pret || occupe ? "bg-carte2 text-sourd" : "bg-accent text-accent-ink active:scale-98 lueur-accent"
             }`}
-            style={{ height: 56 }}
+            style={{ height: 58 }}
           >
             {occupe ? "Vérification…" : creation ? "Créer mon espace" : "Entrer"}
           </button>
         </form>
 
-        <p className="text-brume text-xs mt-4 leading-relaxed text-center">
+        <p className="text-sourd text-xs mt-6 leading-relaxed text-center">
           Chaque espace a ses propres profils, programmes et historiques. Rien n’est partagé
           entre deux espaces.
         </p>
@@ -2273,7 +2369,7 @@ export default function App() {
   const [programmesPerso, setProgrammesPerso] = useState([]);
   const [exosPerso, setExosPerso] = useState([]);
   const [syncEtat, setSyncEtat] = useState("off"); // "ok" | "off"
-  const [onglet, setOnglet] = useState("semaine");
+  const [onglet, setOnglet] = useState("accueil"); // accueil | programmes | progres | journal | profil
   const [ouverte, setOuverte] = useState(null); // id de séance ou null
   const [edition, setEdition] = useState(null); // null | {id} | {nouveau:true}
   const [minuteur, setMinuteur] = useState(null); // {finA, total, label}
@@ -2710,7 +2806,7 @@ export default function App() {
     ]);
     setStore((prev) => ({ ...prev, [id]: etatVide() }));
     choisirProfil(id);
-    setOnglet("semaine");
+    setOnglet("profil");
   }
 
   function majProfil(id, patch) {
@@ -2749,9 +2845,11 @@ export default function App() {
       let maj = transformer(seance);
       if (!maj || maj === seance) return prev;
       if (activite) {
+        const enCours = seanceDemarree(seance) && seance.debut;
         maj = {
           ...maj,
-          debut: seanceDemarree(seance) && seance.debut ? seance.debut : cleJour(),
+          debut: enCours ? seance.debut : cleJour(),
+          t0: enCours && seance.t0 ? seance.t0 : Date.now(),
           maj: Date.now(),
         };
       }
@@ -2911,7 +3009,16 @@ export default function App() {
     /* chaque validation est enregistrée — y compris la même séance refaite
        dans la semaine (ça arrive, et ça compte) */
     const repeat = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
-    const historique = [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
+    const duree = dureeSeance(etatSeance, Date.now());
+    const records = recordsBattus(detail, donnees.historique);
+    const historique = [
+      ...donnees.historique,
+      {
+        s: seance.id, d: auj, titre: seance.titre, detail, kcal,
+        ...(duree ? { duree } : {}),
+        ...(records.length ? { records: records.map((r) => r.id) } : {}),
+      },
+    ];
     const vierge = seanceVierge();
     setStore((prev) => {
       const p = prev[profil];
@@ -2925,7 +3032,7 @@ export default function App() {
       };
     });
     setOuverte(null);
-    setFete({ titre: seance.titre, repeat, total: historique.length, kcal });
+    setFete({ titre: seance.titre, repeat, total: historique.length, kcal, duree, nbExos: detail.length, records });
   }
 
   /* Séances commencées puis oubliées (pas validées avant la fin de la
@@ -2958,7 +3065,10 @@ export default function App() {
         const { detail, kcal } = instantaneSeance(v.def, et, d, dicoExos, v.prof.niveau || "standard");
         const historique = [
           ...d.historique,
-          { s: v.sid, d: et.debut, titre: v.def.titre, detail, kcal, auto: true },
+          {
+            s: v.sid, d: et.debut, titre: v.def.titre, detail, kcal, auto: true,
+            ...(dureeSeance(et, et.maj) ? { duree: dureeSeance(et, et.maj) } : {}),
+          },
         ];
         const vierge = seanceVierge();
         const chargesMaj = chargesApres(d.charges, detail);
@@ -2986,7 +3096,7 @@ export default function App() {
         fn: () => {
           setEdition(null);
           setOuverte(null);
-          setOnglet("historique");
+          setOnglet("journal");
           if (premier.prof.id !== etatRef.current.profil) choisirProfil(premier.prof.id);
         },
       },
@@ -3103,11 +3213,32 @@ export default function App() {
     let w = idsParSemaine.has(lundiActuel) ? lundiActuel : semainesAvant(lundiActuel, 1);
     while (idsParSemaine.has(w) && idsParSemaine.get(w).size > 0) { serie++; w = semainesAvant(w, 1); }
     const barres = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 7; i >= 0; i--) {
       const wk = semainesAvant(lundiActuel, i);
       barres.push({ semaine: wk, n: nParSemaine.get(wk) || 0 });
     }
-    return { total: donnees.historique.length, cetteSemaine, nCetteSemaine, serie, barres };
+    /* jours de la semaine en cours où une séance a été validée */
+    const jours = {};
+    let kcalSemaine = 0;
+    /* 30 derniers jours : énergie, volume soulevé, séances */
+    const depuis = cleJour(new Date(Date.now() - 29 * 86400000));
+    let kcal30 = 0, volume30 = 0, n30 = 0, minutes30 = 0;
+    for (const h of donnees.historique) {
+      if (lundiDe(h.d) === lundiActuel) {
+        jours[h.d] = (jours[h.d] || 0) + 1;
+        kcalSemaine += h.kcal || 0;
+      }
+      if (h.d >= depuis) {
+        n30++;
+        kcal30 += h.kcal || 0;
+        minutes30 += h.duree || 0;
+        for (const d of h.detail || []) volume30 += volumeExo(d);
+      }
+    }
+    return {
+      total: donnees.historique.length, cetteSemaine, nCetteSemaine, serie, barres,
+      jours, kcalSemaine, kcal30, volume30, n30, minutes30,
+    };
   }, [store, profil]);
 
   etatRef.current = { corbeille, programmesPerso, profil };
@@ -3134,8 +3265,10 @@ export default function App() {
   /* ---- écran de chargement ---- */
   if (chargement) {
     return (
-      <div data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-4">
-        <Dumbbell size={40} className="text-accent pulsation" />
+      <div data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta flex flex-col items-center justify-center gap-5">
+        <span className="h-16 w-16 rounded-[22px] bg-accent flex items-center justify-center pulsation">
+          <Dumbbell size={28} className="text-accent-ink" strokeWidth={2.4} />
+        </span>
         <p className="text-brume text-sm">Chargement de vos séances…</p>
       </div>
     );
@@ -3150,87 +3283,17 @@ export default function App() {
   const idsProgrammeOuvert = new Set(
     progOuvert ? progOuvert.seances.flatMap((s) => s.exos.map((e) => e.id)) : []
   );
+  const pleinEcran = !!edition || !!seanceOuverte;
+
+  /* re-toucher l'onglet actif remonte en haut de la page */
+  function changerOnglet(id) {
+    if (id === onglet && defileur.current) defileur.current.scrollTo({ top: 0, behavior: "smooth" });
+    setOnglet(id);
+  }
 
   return (
     <div ref={defileur} data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta">
-      <div className="mx-auto max-w-md px-4 pb-32">
-
-        {/* ---------- en-tête ---------- */}
-        <header className="pt-5 pb-4">
-          <div className="flex items-center gap-2.5">
-            {/* raccourci discret : trois appuis ouvrent la liste des espaces */}
-            <button
-              onClick={tapHaltere}
-              aria-label="Coachwork"
-              className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center shrink-0 transi"
-            >
-              <Dumbbell size={20} className="text-accent-ink" strokeWidth={2.5} />
-            </button>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-extrabold leading-none tracking-tight">Coachwork</h1>
-              <p className="text-brume text-xs mt-0.5 truncate">
-                {espace ? espace.nom : "3 séances / semaine"}
-              </p>
-            </div>
-            <button
-              onClick={espace ? quitterEspace : undefined}
-              disabled={!espace}
-              aria-label={espace ? `Espace ${espace.nom} — changer d’espace` : "Données sur cet appareil uniquement"}
-              title={syncEtat === "ok" ? "Synchronisé — appuie pour changer d’espace" : "Données sur cet appareil uniquement"}
-              className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transi ${
-                espace ? "bg-carte border border-ligne active:scale-95" : ""
-              }`}
-            >
-              {syncEtat === "ok"
-                ? <Cloud size={16} className="text-accent transi" />
-                : <CloudOff size={16} className="text-brume" />}
-            </button>
-          </div>
-
-          {/* sélecteur de profil (un par personne de l’espace) */}
-          <div
-            className={`mt-4 grid gap-2 ${profils.length > 2 ? "grid-cols-3" : "grid-cols-2"}`}
-            role="group"
-            aria-label="Choisir le profil"
-          >
-            {profils.map((p) => {
-              const actif = profil === p.id;
-              const nom = nomAffiche(store[p.id], p);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => choisirProfil(p.id)}
-                  data-accent={p.accent || "lime"}
-                  className={`h-14 rounded-2xl flex items-center justify-center gap-2 font-bold transi border px-2 ${
-                    actif
-                      ? "bg-accent text-accent-ink border-transparent"
-                      : "bg-carte text-brume border-ligne active:scale-95"
-                  }`}
-                >
-                  <span
-                    className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-extrabold shrink-0 transi ${
-                      actif ? "encre-sur-accent" : `pastille-${p.accent || "lime"} text-fond`
-                    }`}
-                  >
-                    {nom.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="truncate min-w-0">{nom}</span>
-                </button>
-              );
-            })}
-            {profils.length < 6 && (
-              <button
-                onClick={ajouterProfil}
-                aria-label="Ajouter un profil"
-                className="h-14 rounded-2xl border border-dashed border-slate-600 text-brume flex items-center justify-center gap-1.5 text-sm font-bold active:scale-95 transi"
-              >
-                <Plus size={17} /> Profil
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* ---------- contenu ---------- */}
+      <div className={`mx-auto max-w-md px-5 ${pleinEcran ? "pb-40" : "pb-36"}`}>
         {edition ? (
           <VueEditeur
             initial={edition.id ? programmesPerso.find((p) => p.id === edition.id) : null}
@@ -3276,48 +3339,57 @@ export default function App() {
           />
         ) : (
           <>
-            {/* onglets */}
-            <div className="grid grid-cols-4 gap-1 rounded-2xl bg-carte p-1 border border-ligne mb-5">
-              {[["semaine", "Semaine"], ["progres", "Progrès"], ["historique", "Historique"], ["conseils", "Conseils"]].map(([id, nom]) => (
-                <button
-                  key={id}
-                  onClick={() => setOnglet(id)}
-                  className={`h-11 rounded-xl text-xs font-bold transi ${
-                    onglet === id ? "bg-accent text-accent-ink" : "text-brume"
-                  }`}
-                >
-                  {nom}
-                </button>
-              ))}
-            </div>
+            <BarreHaut
+              profils={profils}
+              store={store}
+              profilActif={profil}
+              espace={espace}
+              syncEtat={syncEtat}
+              surHaltere={tapHaltere}
+              surChoisir={choisirProfil}
+              surAjouter={ajouterProfil}
+              surEspace={() => changerOnglet("profil")}
+            />
 
-            {onglet === "semaine" ? (
-              <VueSemaine
+            {onglet === "accueil" ? (
+              <VueAccueil
                 profil={profil}
                 profilObj={profilActif}
-                profils={profils}
-                stats={stats}
                 donnees={donnees}
+                stats={stats}
+                progActuel={progActuel}
+                espace={espace}
+                syncEtat={syncEtat}
+                surOuvrir={setOuverte}
+                surProgrammes={() => changerOnglet("programmes")}
+                surProfil={() => changerOnglet("profil")}
+                surJournal={() => changerOnglet("journal")}
+              />
+            ) : onglet === "programmes" ? (
+              <VueProgrammes
+                profil={profil}
                 programmes={programmes}
                 progActuel={progActuel}
+                stats={stats}
                 syncEtat={syncEtat}
-                espace={espace}
-                surOuvrir={setOuverte}
+                corbeille={corbeille}
                 surMode={choisirMode}
-                surMesure={noterMesure}
-                surMajProfil={(patch) => majProfil(profil, patch)}
-                surSupprimerProfil={() => supprimerProfil(profil)}
-                surDefinirCode={definirCodeEspace}
+                surOuvrir={setOuverte}
                 surPartager={async (id) => setCodePartage(await partagerProgramme(id))}
                 surImporter={() => setImportOuvert(true)}
-                corbeille={corbeille}
-                surCorbeille={() => setCorbeilleOuverte(true)}
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
+                surCorbeille={() => setCorbeilleOuverte(true)}
               />
             ) : onglet === "progres" ? (
-              <VueProgres profil={profil} historique={donnees.historique} dico={dicoExos} />
-            ) : onglet === "historique" ? (
+              <VueProgres
+                profil={profil}
+                historique={donnees.historique}
+                dico={dicoExos}
+                stats={stats}
+                objectif={progActuel.seances.length}
+              />
+            ) : onglet === "journal" ? (
               <VueHistorique
                 profil={profil}
                 historique={donnees.historique}
@@ -3325,78 +3397,43 @@ export default function App() {
                 surSupprimer={supprimerEntree}
               />
             ) : (
-              <div key={`conseils-${profil}`} className="vue space-y-3">
-                {CONSEILS.map((c) => (
-                  <Accordeon
-                    key={c.id}
-                    icone={c.icone}
-                    titre={c.titre}
-                    texte={c.texte}
-                    accent={niveauActif === "doux" && c.id === "cinquante-quatre"}
-                  />
-                ))}
-                <p className="text-brume text-center text-xs pt-2 leading-relaxed">
-                  Ce programme ne remplace pas un avis médical.<br />Fait avec soin pour Esteban & Valérie.
-                </p>
-              </div>
+              <VueProfil
+                profil={profil}
+                profilObj={profilActif}
+                profils={profils}
+                donnees={donnees}
+                espace={espace}
+                syncEtat={syncEtat}
+                surMesure={noterMesure}
+                surMajProfil={(patch) => majProfil(profil, patch)}
+                surSupprimerProfil={() => supprimerProfil(profil)}
+                surAjouterProfil={ajouterProfil}
+                surDefinirCode={definirCodeEspace}
+                surChangerEspace={quitterEspace}
+              />
             )}
           </>
         )}
       </div>
 
-      {/* ---------- minuteur de repos flottant ---------- */}
-      {minuteur && (
-        <div className="fixed left-4 right-4 z-40 mx-auto max-w-md vue barre-flottante">
-          <div className="rounded-2xl bg-carte border bordure-accent-douce p-4 shadow-lg">
-            {resteRepos > 0 ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <Timer size={20} className="text-accent shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-brume truncate">Repos — {minuteur.label}</p>
-                    <p className="text-2xl font-extrabold chiffres leading-tight">
-                      {Math.floor(resteRepos / 60)}:{String(resteRepos % 60).padStart(2, "0")}
-                    </p>
-                  </div>
-                  <button
-                    onClick={prolongerRepos}
-                    className="h-11 px-3 rounded-xl bg-carte2 text-sm font-bold flex items-center gap-1 active:scale-95 transi"
-                  >
-                    <Plus size={16} /> 30 s
-                  </button>
-                  <button
-                    onClick={arreterRepos}
-                    aria-label="Arrêter le repos"
-                    className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-                  >
-                    <X size={18} className="text-brume" />
-                  </button>
-                </div>
-                <div className="mt-3 h-1.5 rounded-full bg-carte2 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-accent barre"
-                    style={{ width: `${(resteRepos / minuteur.total) * 100}%` }}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Sparkles size={20} className="text-accent" />
-                <p className="font-bold flex-1">Repos terminé — à toi !</p>
-                <button
-                  onClick={arreterRepos}
-                  aria-label="Fermer"
-                  className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center"
-                >
-                  <X size={18} className="text-brume" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+      {!pleinEcran && (
+        <NavBas
+          onglet={onglet}
+          surChoisir={changerOnglet}
+          alerteProfil={syncEtat === "ok" && !!espace && espace.protege === false}
+        />
       )}
 
-      {/* ---------- fête de fin de séance ---------- */}
+      {/* ---------- minuteur de repos flottant ---------- */}
+      {minuteur && (
+        <MinuteurRepos
+          minuteur={minuteur}
+          reste={resteRepos}
+          surProlonger={prolongerRepos}
+          surArreter={arreterRepos}
+        />
+      )}
+
       {codePartage && (
         <FeuilleCodePartage resultat={codePartage} surFermer={() => setCodePartage(null)} />
       )}
@@ -3426,46 +3463,56 @@ export default function App() {
         />
       )}
 
-      {fete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 voile" onClick={() => setFete(null)}>
-          <div className="w-full max-w-sm rounded-3xl bg-carte border border-ligne p-8 text-center surgit" onClick={(e) => e.stopPropagation()}>
-            <span className="mx-auto h-20 w-20 rounded-full bg-accent-soft flex items-center justify-center">
-              <Flame size={38} className="text-accent" />
-            </span>
-            <h2 className="mt-5 text-2xl font-extrabold tracking-tight">Séance validée !</h2>
-            <p className="mt-1 text-brume text-sm">{fete.titre}</p>
-            <p className="mt-3 text-douce text-sm leading-relaxed">
-              {fete.repeat
-                ? "Deuxième fois cette semaine sur cette séance — double dose, chapeau. Elle compte, évidemment."
-                : MESSAGES_FETE[fete.total % MESSAGES_FETE.length]}
-            </p>
-            {fete.kcal ? (
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5">
-                <Flame size={15} className="text-accent transi" />
-                <span className="text-sm font-extrabold chiffres text-accent transi">≈ {fete.kcal} kcal</span>
-                <span className="text-xs text-brume">dépensées</span>
-              </div>
-            ) : null}
-            <p className="mt-4 text-brume text-xs chiffres">
-              {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.nCetteSemaine} cette semaine
-            </p>
-            <button
-              onClick={() => setFete(null)}
-              className="mt-6 w-full rounded-2xl bg-accent text-accent-ink font-extrabold text-base transi active:scale-95"
-              style={{ height: 52 }}
-            >
-              Retour à ma semaine
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ---------- fête de fin de séance ---------- */}
+      {fete && <FeteSeance fete={fete} stats={stats} surFermer={() => setFete(null)} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Vue « Ma semaine »                                                  */
+/* Feuilles, navigation et vues principales                            */
 /* ------------------------------------------------------------------ */
+
+/* Feuille du bas commune : voile, poignée, en-tête (icône, titre, fermer) */
+function Feuille({ titre, sousTitre, icone: Icone, surFermer, children, sansEntete = false }) {
+  useVerrouScroll();
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="feuille w-full mx-auto max-w-md rounded-t-4xl bg-carte px-5 pt-2.5 coussin-bas"
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={titre}
+      >
+        <div className="poignee mx-auto mb-4" />
+        {!sansEntete && (
+          <div className="flex items-center gap-3 mb-4">
+            {Icone && (
+              <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+                <Icone size={20} className="text-accent transi" />
+              </span>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-extrabold text-[17px] leading-tight tracking-tight truncate">{titre}</h3>
+              {sousTitre && <p className="text-brume text-xs mt-0.5">{sousTitre}</p>}
+            </div>
+            <button
+              onClick={surFermer}
+              aria-label="Fermer"
+              className="h-10 w-10 rounded-full bg-carte2 flex items-center justify-center shrink-0 active:scale-95 transi"
+            >
+              <X size={17} className="text-brume" />
+            </button>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 /* Petit message en haut de l'écran, avec une action éventuelle (Annuler, Voir) */
 function Toast({ toast, surFermer }) {
@@ -3475,13 +3522,13 @@ function Toast({ toast, surFermer }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]);
   return createPortal(
-    <div className="fixed left-4 right-4 z-50 mx-auto max-w-md toast-haut font-jakarta text-encre surgit" role="status">
-      <div className="rounded-2xl bg-carte2 border border-ligne p-2 pl-4 flex items-center gap-2 ombre-toast">
+    <div className="fixed left-3 right-3 z-50 mx-auto max-w-md toast-haut font-jakarta text-encre surgit" role="status">
+      <div className="rounded-[22px] verre p-2 pl-4 flex items-center gap-2">
         <p className="flex-1 min-w-0 text-sm leading-snug text-douce py-1.5">{toast.message}</p>
         {toast.action && (
           <button
             onClick={() => { toast.action.fn(); surFermer(); }}
-            className="h-10 px-3.5 rounded-xl bg-accent text-accent-ink text-sm font-extrabold shrink-0 active:scale-95 transi"
+            className="h-10 px-4 rounded-full bg-accent text-accent-ink text-sm font-extrabold shrink-0 active:scale-95 transi"
           >
             {toast.action.libelle}
           </button>
@@ -3489,7 +3536,7 @@ function Toast({ toast, surFermer }) {
         <button
           onClick={surFermer}
           aria-label="Fermer le message"
-          className="h-10 w-9 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transi"
+          className="h-10 w-9 rounded-full flex items-center justify-center shrink-0 active:scale-95 transi"
         >
           <X size={16} className="text-brume" />
         </button>
@@ -3506,67 +3553,40 @@ function delaiRestant(ms) {
 
 /* Corbeille : programmes supprimés depuis moins de 3 jours */
 function FeuilleCorbeille({ entrees, surRestaurer, surFermer }) {
-  useVerrouScroll();
   const maintenant = Date.now();
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-      <div
-        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-            <Trash2 size={19} className="text-accent transi" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-base leading-tight">Corbeille</h3>
-            <p className="text-brume text-xs mt-0.5">Vidée automatiquement au bout de 3 jours</p>
-          </div>
-          <button
-            onClick={surFermer}
-            aria-label="Fermer"
-            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-          >
-            <X size={18} className="text-brume" />
-          </button>
-        </div>
-
-        {entrees.length === 0 ? (
-          <p className="text-brume text-sm py-3 leading-relaxed">
-            La corbeille est vide.
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-72 overflow-y-auto defile">
-            {entrees.map((e) => {
-              const n = e.prog.seances.length;
-              return (
-                <div key={e.prog.id} className="rounded-2xl bg-carte2 border border-ligne p-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{e.prog.nom}</p>
-                    <p className="text-brume text-xs mt-0.5">
-                      {n} séance{n > 1 ? "s" : ""} · effacé {delaiRestant(e.supprimeLe + DUREE_CORBEILLE - maintenant)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => surRestaurer(e.prog.id)}
-                    className="h-11 px-3 rounded-xl bg-accent text-accent-ink text-sm font-extrabold flex items-center gap-1.5 shrink-0 active:scale-95 transi"
-                  >
-                    <RotateCcw size={15} strokeWidth={2.5} /> Restaurer
-                  </button>
+  return (
+    <Feuille titre="Corbeille" sousTitre="Vidée automatiquement au bout de 3 jours" icone={Trash2} surFermer={surFermer}>
+      {entrees.length === 0 ? (
+        <p className="text-brume text-sm py-3 leading-relaxed">La corbeille est vide.</p>
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto defile">
+          {entrees.map((e) => {
+            const n = e.prog.seances.length;
+            return (
+              <div key={e.prog.id} className="rounded-2xl surface-2 p-3 pl-4 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-[15px] truncate">{e.prog.nom}</p>
+                  <p className="text-brume text-xs mt-0.5">
+                    {n} séance{n > 1 ? "s" : ""} · effacé {delaiRestant(e.supprimeLe + DUREE_CORBEILLE - maintenant)}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
+                <button
+                  onClick={() => surRestaurer(e.prog.id)}
+                  className="h-11 px-4 rounded-full bg-accent text-accent-ink text-sm font-extrabold flex items-center gap-1.5 shrink-0 active:scale-95 transi"
+                >
+                  <RotateCcw size={15} strokeWidth={2.5} /> Restaurer
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Feuille>
   );
 }
 
 /* Code de partage d'un programme : à transmettre à qui on veut */
 function FeuilleCodePartage({ resultat, surFermer }) {
-  useVerrouScroll();
   const [copie, setCopie] = useState(false);
 
   async function copier() {
@@ -3578,83 +3598,49 @@ function FeuilleCodePartage({ resultat, surFermer }) {
   }
 
   if (resultat.erreur) {
-    return createPortal(
-      <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-        <div
-          className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit text-center"
-          onClick={(e) => e.stopPropagation()}
+    return (
+      <Feuille titre="Partage impossible" icone={Share2} surFermer={surFermer}>
+        <p className="text-brume text-sm leading-relaxed">{resultat.erreur}</p>
+        <button
+          onClick={surFermer}
+          className="mt-5 w-full h-14 rounded-2xl bg-carte2 text-douce font-bold active:scale-98 transi"
         >
-          <h3 className="font-extrabold text-base">Partage impossible</h3>
-          <p className="text-brume text-sm mt-2 leading-relaxed">{resultat.erreur}</p>
-          <button
-            onClick={surFermer}
-            className="mt-5 w-full h-14 rounded-2xl bg-carte2 text-douce font-bold active:scale-98 transi"
-          >
-            Fermer
-          </button>
-        </div>
-      </div>,
-      document.body
+          Fermer
+        </button>
+      </Feuille>
     );
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-      <div
-        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
+  return (
+    <Feuille titre={resultat.nom} sousTitre="Code de partage" icone={Share2} surFermer={surFermer}>
+      <p
+        className="w-full rounded-3xl surface-2 text-center font-extrabold chiffres flex items-center justify-center"
+        style={{ height: 84, fontSize: 38, letterSpacing: 8 }}
       >
-        <div className="flex items-center gap-3">
-          <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-            <Share2 size={20} className="text-accent transi" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-base leading-tight truncate">{resultat.nom}</h3>
-            <p className="text-brume text-xs mt-0.5">Code de partage</p>
-          </div>
-        </div>
-
-        <p
-          className="mt-5 w-full rounded-2xl bg-carte2 text-center font-extrabold chiffres flex items-center justify-center"
-          style={{ height: 72, fontSize: 34, letterSpacing: 6 }}
-        >
-          {resultat.code}
-        </p>
-
-        <p className="text-brume text-xs mt-3 leading-relaxed">
-          Transmets ce code : depuis son espace, la personne le saisit dans{" "}
-          <strong className="text-douce">Mon programme → Importer</strong> et reçoit une copie
-          indépendante.
-          {resultat.nbExos > 0
-            ? ` Tes ${resultat.nbExos} exercice${resultat.nbExos > 1 ? "s" : ""} maison partent avec.`
-            : ""}{" "}
-          Le code reste valable 30 jours et ne donne accès qu’à ce programme.
-        </p>
-
-        <div className="mt-5 flex gap-2">
-          <button
-            onClick={copier}
-            className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi flex items-center justify-center gap-2"
-          >
-            {copie ? <Check size={18} strokeWidth={3} /> : <Copy size={18} />}
-            {copie ? "Copié !" : "Copier le code"}
-          </button>
-          <button
-            onClick={surFermer}
-            className="h-14 px-5 rounded-2xl bg-carte2 text-brume font-bold active:scale-95 transi"
-          >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+        {resultat.code}
+      </p>
+      <p className="text-brume text-[13px] mt-4 leading-relaxed">
+        Transmets ce code : depuis son espace, la personne le saisit dans{" "}
+        <strong className="text-douce">Programmes → Importer</strong> et reçoit une copie
+        indépendante.
+        {resultat.nbExos > 0
+          ? ` Tes ${resultat.nbExos} exercice${resultat.nbExos > 1 ? "s" : ""} maison partent avec.`
+          : ""}{" "}
+        Le code reste valable 30 jours et ne donne accès qu’à ce programme.
+      </p>
+      <button
+        onClick={copier}
+        className="mt-5 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi flex items-center justify-center gap-2 lueur-accent"
+      >
+        {copie ? <Check size={18} strokeWidth={3} /> : <Copy size={18} />}
+        {copie ? "Copié !" : "Copier le code"}
+      </button>
+    </Feuille>
   );
 }
 
 /* Saisie d'un code reçu : importe une copie du programme */
 function FeuilleImport({ surImporter, surFermer }) {
-  useVerrouScroll();
   const [code, setCode] = useState("");
   const [erreur, setErreur] = useState(null);
   const [occupe, setOccupe] = useState(false);
@@ -3671,176 +3657,123 @@ function FeuilleImport({ surImporter, surFermer }) {
     else setFait(r);
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-      <div
-        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {fait ? (
-          <div className="text-center">
-            <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
-              <Check size={30} strokeWidth={3} className="text-accent transi" />
-            </span>
-            <h3 className="mt-4 font-extrabold text-lg">{fait.nom}</h3>
-            <p className="text-brume text-sm mt-2 leading-relaxed">
-              Le programme est copié dans ton espace et déjà sélectionné.
-              {fait.nbExos > 0
-                ? ` ${fait.nbExos} exercice${fait.nbExos > 1 ? "s" : ""} maison ${
-                    fait.nbExos > 1 ? "ont" : "a"
-                  } rejoint ton catalogue.`
-                : ""}{" "}
-              Modifie-le comme tu veux : l’original n’en saura rien.
-            </p>
-            <button
-              onClick={surFermer}
-              className="mt-5 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
-            >
-              C’est parti
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-                <Download size={20} className="text-accent transi" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-extrabold text-base leading-tight">Importer un programme</h3>
-                <p className="text-brume text-xs mt-0.5">Avec le code reçu</p>
-              </div>
-              <button
-                onClick={surFermer}
-                aria-label="Fermer"
-                className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-              >
-                <X size={18} className="text-brume" />
-              </button>
-            </div>
-            <form onSubmit={valider}>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="Ex. : 7K2MPQ"
-                autoComplete="off"
-                autoCapitalize="characters"
-                className="mt-4 w-full rounded-2xl bg-carte2 px-4 text-center font-extrabold chiffres outline-none placeholder-slate-600"
-                style={{ height: 60, fontSize: 26, letterSpacing: 4 }}
-                aria-label="Code de partage"
-              />
-              {erreur && <p className="text-rouge text-xs mt-3 text-center">{erreur}</p>}
-              <button
-                type="submit"
-                disabled={code.trim().length < 4 || occupe}
-                className={`mt-4 w-full h-14 rounded-2xl font-extrabold text-base transi ${
-                  code.trim().length < 4 || occupe
-                    ? "bg-carte2 text-brume"
-                    : "bg-accent text-accent-ink active:scale-98"
-                }`}
-              >
-                {occupe ? "Import en cours…" : "Importer"}
-              </button>
-            </form>
-            <p className="text-brume text-xs mt-3 leading-relaxed text-center">
-              Tu recevras une copie : la modifier ne touchera pas l’original.
-            </p>
-          </>
-        )}
-      </div>
-    </div>,
-    document.body
+  if (fait) {
+    return (
+      <Feuille titre={fait.nom} surFermer={surFermer} sansEntete>
+        <div className="text-center pt-2">
+          <span className="mx-auto h-16 w-16 rounded-full bg-accent flex items-center justify-center pop">
+            <Check size={30} strokeWidth={3} className="text-accent-ink" />
+          </span>
+          <h3 className="mt-4 titre-l">{fait.nom}</h3>
+          <p className="text-brume text-sm mt-2 leading-relaxed">
+            Le programme est copié dans ton espace et déjà sélectionné.
+            {fait.nbExos > 0
+              ? ` ${fait.nbExos} exercice${fait.nbExos > 1 ? "s" : ""} maison ${
+                  fait.nbExos > 1 ? "ont" : "a"
+                } rejoint ton catalogue.`
+              : ""}{" "}
+            Modifie-le comme tu veux : l’original n’en saura rien.
+          </p>
+          <button
+            onClick={surFermer}
+            className="mt-6 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
+          >
+            C’est parti
+          </button>
+        </div>
+      </Feuille>
+    );
+  }
+
+  return (
+    <Feuille titre="Importer un programme" sousTitre="Avec le code reçu" icone={Download} surFermer={surFermer}>
+      <form onSubmit={valider}>
+        <input
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="7K2MPQ"
+          autoComplete="off"
+          autoCapitalize="characters"
+          className="w-full rounded-3xl surface-2 px-4 text-center font-extrabold chiffres outline-none placeholder-sourd"
+          style={{ height: 72, fontSize: 30, letterSpacing: 6 }}
+          aria-label="Code de partage"
+        />
+        {erreur && <p className="text-rouge text-sm mt-3 text-center">{erreur}</p>}
+        <button
+          type="submit"
+          disabled={code.trim().length < 4 || occupe}
+          className={`mt-4 w-full h-14 rounded-2xl font-extrabold text-base transi ${
+            code.trim().length < 4 || occupe ? "bg-carte2 text-sourd" : "bg-accent text-accent-ink active:scale-98"
+          }`}
+        >
+          {occupe ? "Import en cours…" : "Importer"}
+        </button>
+      </form>
+      <p className="text-sourd text-xs mt-3 leading-relaxed text-center">
+        Tu recevras une copie : la modifier ne touchera pas l’original.
+      </p>
+    </Feuille>
   );
 }
 
 /* Panneau caché (trois appuis sur l'haltère) : bascule entre les espaces déjà
    ouverts sur ce téléphone. Rien n'est demandé au serveur pour l'afficher. */
 function FeuilleEspaces({ espaces, actuel, surBasculer, surOublier, surAutre, surFermer }) {
-  useVerrouScroll();
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-      <div
-        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-base leading-tight">Mes espaces</h3>
-            <p className="text-brume text-xs mt-0.5">Ceux déjà ouverts sur ce téléphone</p>
-          </div>
-          <button
-            onClick={surFermer}
-            aria-label="Fermer"
-            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-          >
-            <X size={18} className="text-brume" />
-          </button>
-        </div>
-
-        {espaces.length === 0 ? (
-          <p className="text-brume text-sm py-3 leading-relaxed">
-            Aucun espace mémorisé pour l’instant. Ceux que tu ouvriras apparaîtront ici.
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-72 overflow-y-auto defile">
-            {espaces.map((e) => {
-              const ici = actuel && actuel.id === e.id;
-              return (
-                <div
-                  key={e.id}
-                  className={`rounded-2xl border flex items-stretch transi ${
-                    ici ? "bg-carte2 bordure-accent-douce" : "bg-carte2 border-ligne"
-                  }`}
-                >
-                  <button
-                    onClick={() => !ici && surBasculer(e)}
-                    className="flex-1 min-w-0 p-3 flex items-center gap-3 text-left active:scale-98 transi"
-                  >
-                    <span
-                      className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transi ${
-                        ici ? "bg-accent" : "bg-carte"
-                      }`}
-                    >
-                      {ici ? (
-                        <Check size={17} strokeWidth={3.5} className="text-accent-ink" />
-                      ) : (
-                        <Dumbbell size={16} className="text-brume" />
-                      )}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="font-bold text-sm block truncate">{e.nom}</span>
-                      <span className="text-brume text-xs block">
-                        {ici ? "Espace actuel" : e.protege === false ? "Sans code" : "Protégé"}
-                      </span>
-                    </span>
-                  </button>
-                  {!ici && (
-                    <button
-                      onClick={() => surOublier(e.id)}
-                      aria-label={`Oublier ${e.nom}`}
-                      className="px-3 flex items-center justify-center shrink-0 active:scale-95 transi"
-                    >
-                      <Trash2 size={15} className="text-brume" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <button
-          onClick={surAutre}
-          className="mt-3 w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-        >
-          <Plus size={17} className="text-accent transi" /> Ouvrir un autre espace
-        </button>
-        <p className="text-brume text-xs mt-3 leading-relaxed">
-          Cette liste ne quitte jamais ce téléphone — les espaces des autres n’y figurent pas.
+  return (
+    <Feuille titre="Mes espaces" sousTitre="Ceux déjà ouverts sur ce téléphone" icone={Users} surFermer={surFermer}>
+      {espaces.length === 0 ? (
+        <p className="text-brume text-sm py-2 leading-relaxed">
+          Aucun espace mémorisé pour l’instant. Ceux que tu ouvriras apparaîtront ici.
         </p>
-      </div>
-    </div>,
-    document.body
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto defile">
+          {espaces.map((e) => {
+            const ici = actuel && actuel.id === e.id;
+            return (
+              <div key={e.id} className={`rounded-2xl flex items-stretch transi ${ici ? "surface-2 contour-accent" : "surface-2"}`}>
+                <button
+                  onClick={() => !ici && surBasculer(e)}
+                  className="flex-1 min-w-0 p-3 flex items-center gap-3 text-left active:scale-98 transi"
+                >
+                  <span className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transi ${ici ? "bg-accent" : "bg-carte3"}`}>
+                    {ici ? (
+                      <Check size={17} strokeWidth={3.5} className="text-accent-ink" />
+                    ) : (
+                      <Dumbbell size={16} className="text-brume" />
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-bold text-[15px] block truncate">{e.nom}</span>
+                    <span className="text-brume text-xs block">
+                      {ici ? "Espace actuel" : e.protege === false ? "Sans code" : "Protégé"}
+                    </span>
+                  </span>
+                </button>
+                {!ici && (
+                  <button
+                    onClick={() => surOublier(e.id)}
+                    aria-label={`Oublier ${e.nom}`}
+                    className="px-4 flex items-center justify-center shrink-0 active:scale-95 transi"
+                  >
+                    <Trash2 size={15} className="text-sourd" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button
+        onClick={surAutre}
+        className="mt-3 w-full h-12 rounded-2xl border border-dashed border-carte3 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+      >
+        <Plus size={17} className="text-accent transi" /> Ouvrir un autre espace
+      </button>
+      <p className="text-sourd text-xs mt-3 leading-relaxed">
+        Cette liste ne quitte jamais ce téléphone — les espaces des autres n’y figurent pas.
+      </p>
+    </Feuille>
   );
 }
 
@@ -3863,13 +3796,15 @@ function CarteProtection({ surDefinirCode }) {
   }
 
   return (
-    <section className="rounded-2xl bg-carte border bordure-accent-douce p-4">
+    <section className="rounded-3xl degrade-heros p-4">
       <div className="flex gap-3">
-        <ShieldCheck size={20} className="text-accent shrink-0 mt-0.5 transi" />
+        <span className="h-9 w-9 rounded-xl bg-accent-soft flex items-center justify-center shrink-0">
+          <ShieldCheck size={18} className="text-accent transi" />
+        </span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs leading-relaxed text-brume">
-            <strong className="text-douce">Cet espace n’a pas encore de code.</strong> N’importe
-            qui connaissant l’adresse peut voir et modifier vos séances. Pose un code : il te sera
+          <p className="text-[15px] font-bold">Cet espace n’a pas encore de code</p>
+          <p className="text-xs leading-relaxed text-brume mt-1">
+            N’importe qui connaissant l’adresse peut voir et modifier vos séances. Le code sera
             demandé une seule fois par téléphone.
           </p>
           {ouvert ? (
@@ -3880,8 +3815,8 @@ function CarteProtection({ surDefinirCode }) {
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="Nouveau code (4 caractères min.)"
                 autoComplete="off"
-                className="w-full rounded-xl bg-carte2 px-3 text-center font-extrabold outline-none placeholder-slate-600"
-                style={{ height: 48 }}
+                className="w-full rounded-2xl bg-carte2 px-4 text-center font-bold outline-none placeholder-sourd"
+                style={{ height: 50 }}
                 aria-label="Nouveau code de l’espace"
               />
               {erreur && <p className="text-rouge text-xs mt-2">{erreur}</p>}
@@ -3889,17 +3824,15 @@ function CarteProtection({ surDefinirCode }) {
                 <button
                   type="button"
                   onClick={() => { setOuvert(false); setErreur(null); }}
-                  className="h-11 px-4 rounded-xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
+                  className="h-11 px-4 rounded-full bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={code.trim().length < 4 || occupe}
-                  className={`flex-1 h-11 rounded-xl font-extrabold text-sm transi ${
-                    code.trim().length < 4 || occupe
-                      ? "bg-carte2 text-brume"
-                      : "bg-accent text-accent-ink active:scale-98"
+                  className={`flex-1 h-11 rounded-full font-extrabold text-sm transi ${
+                    code.trim().length < 4 || occupe ? "bg-carte2 text-sourd" : "bg-accent text-accent-ink active:scale-98"
                   }`}
                 >
                   {occupe ? "Enregistrement…" : "Protéger l’espace"}
@@ -3909,7 +3842,7 @@ function CarteProtection({ surDefinirCode }) {
           ) : (
             <button
               onClick={() => setOuvert(true)}
-              className="mt-3 h-11 w-full rounded-xl bg-accent text-accent-ink font-extrabold text-sm active:scale-98 transi"
+              className="mt-3 h-11 px-5 rounded-full bg-accent text-accent-ink font-extrabold text-sm active:scale-98 transi"
             >
               Protéger par un code
             </button>
@@ -3920,366 +3853,855 @@ function CarteProtection({ surDefinirCode }) {
   );
 }
 
-function VueSemaine({
-  profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat, espace,
-  surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surDefinirCode,
-  surPartager, surImporter, corbeille = [], surCorbeille,
-  surCreer, surEditer,
+/* Barre du haut : logo (trois appuis = espaces), espace, avatars des profils */
+function BarreHaut({ profils, store, profilActif, espace, syncEtat, surHaltere, surChoisir, surAjouter, surEspace }) {
+  const serre = profils.length > 3;
+  return (
+    <header className="pt-4 pb-6 flex items-center gap-3">
+      {/* raccourci discret : trois appuis ouvrent la liste des espaces */}
+      <button
+        onClick={surHaltere}
+        aria-label="Coachwork"
+        className="h-10 w-10 rounded-[14px] bg-accent flex items-center justify-center shrink-0 transi lueur-accent"
+      >
+        <Dumbbell size={19} className="text-accent-ink" strokeWidth={2.5} />
+      </button>
+      <button onClick={surEspace} className="flex-1 min-w-0 text-left" aria-label="Espace et réglages">
+        <span className="block text-[15px] font-extrabold leading-none tracking-tight">Coachwork</span>
+        <span className="mt-1.5 flex items-center gap-1.5 text-xs text-brume min-w-0">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 transi ${syncEtat === "ok" ? "bg-accent" : "bg-sourd"}`} />
+          <span className="truncate">{espace ? espace.nom : "Sur cet appareil"}</span>
+        </span>
+      </button>
+      <div className="flex items-center shrink-0" role="group" aria-label="Choisir le profil">
+        {profils.map((p, i) => {
+          const actif = p.id === profilActif;
+          const nom = nomAffiche(store[p.id], p);
+          return (
+            <button
+              key={p.id}
+              onClick={() => surChoisir(p.id)}
+              aria-label={`Profil ${nom}`}
+              aria-pressed={actif}
+              data-accent={p.accent || "lime"}
+              className={`relative rounded-full flex items-center justify-center font-extrabold text-[13px] shrink-0 transi pastille-${
+                p.accent || "lime"
+              } text-fond ${actif ? "anneau-accent z-10" : "scale-[0.86] opacity-80 active:scale-75"}`}
+              style={{ height: 34, width: 34, marginLeft: i === 0 ? 0 : serre ? -6 : 8 }}
+            >
+              {nom.charAt(0).toUpperCase()}
+            </button>
+          );
+        })}
+        {profils.length < 6 && (
+          <button
+            onClick={surAjouter}
+            aria-label="Ajouter un profil"
+            className="ml-2.5 h-[34px] w-[34px] rounded-full border border-dashed border-carte3 text-brume flex items-center justify-center active:scale-95 transi"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
+
+const ONGLETS = [
+  { id: "accueil", libelle: "Accueil", icone: House },
+  { id: "programmes", libelle: "Programmes", icone: LayoutList },
+  { id: "progres", libelle: "Progrès", icone: TrendingUp },
+  { id: "journal", libelle: "Journal", icone: CalendarDays },
+  { id: "profil", libelle: "Profil", icone: CircleUser },
+];
+
+/* Navigation flottante du bas (à portée de pouce) */
+function NavBas({ onglet, surChoisir, alerteProfil }) {
+  return (
+    <nav className="fixed left-3 right-3 z-40 mx-auto max-w-md nav-bas" aria-label="Navigation principale">
+      <div className="verre rounded-[26px] h-[66px] px-1 flex items-stretch">
+        {ONGLETS.map(({ id, libelle, icone: Icone }) => {
+          const actif = onglet === id;
+          return (
+            <button
+              key={id}
+              onClick={() => surChoisir(id)}
+              aria-current={actif ? "page" : undefined}
+              className="flex-1 min-w-0 flex flex-col items-center justify-center gap-1"
+            >
+              <span className={`relative h-8 w-[52px] rounded-full flex items-center justify-center transi ${actif ? "bg-accent-soft" : ""}`}>
+                <Icone size={21} strokeWidth={actif ? 2.4 : 1.9} className={`transi ${actif ? "text-accent" : "text-brume"}`} />
+                {id === "profil" && alerteProfil && (
+                  <span className="absolute top-0.5 right-3 h-2 w-2 rounded-full" style={{ background: "#f87171" }} />
+                )}
+              </span>
+              <span className={`text-[10.5px] leading-none transi truncate max-w-full ${actif ? "text-encre font-bold" : "text-brume font-semibold"}`}>
+                {libelle}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+/* « Séance A — Fondations » → ["Séance A", "Fondations"] */
+function decouperTitre(titre) {
+  const i = titre.indexOf(" — ");
+  return i === -1 ? [null, titre] : [titre.slice(0, i), titre.slice(i + 3)];
+}
+
+const FORMAT_JOUR_COURT = new Intl.DateTimeFormat("fr-FR", { weekday: "short" });
+const FORMAT_MOIS = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+
+function formatNombre(n) {
+  return Math.round(n).toLocaleString("fr-FR");
+}
+
+/* ------------------------------------------------------------------ */
+/* Accueil : aujourd'hui, la prochaine séance, la semaine              */
+/* ------------------------------------------------------------------ */
+
+function VueAccueil({
+  profil, profilObj, donnees, stats, progActuel, espace, syncEtat,
+  surOuvrir, surProgrammes, surProfil, surJournal,
 }) {
-  const nbCorbeille = purgerCorbeille(corbeille).length;
-  const p = profilObj;
-  const nom = nomAffiche(donnees, p);
-  const dateFr = FORMAT_JOUR.format(new Date());
-  const age = parseCharge(donnees.mesures.age);
-  /* le conseil « densité osseuse » n’a de sens qu’après 50 ans */
-  const noteOsseuse = age != null && age >= 50;
+  const nom = nomAffiche(donnees, profilObj);
+  const auj = cleJour();
+  const objectif = progActuel.seances.length;
+  /* prochaine séance : une séance commencée d'abord, sinon la première pas encore faite */
+  const enCours = progActuel.seances.find((s) => seanceDemarree(normaliserSeance(donnees.seances[s.id])));
+  const aFaire = progActuel.seances.find((s) => !stats.cetteSemaine.has(s.id));
+  const prochaine = enCours || aFaire || null;
+  const reste = Math.max(0, objectif - stats.nCetteSemaine);
+  const phrase = enCours
+    ? "Ta séance t’attend là où tu l’as laissée."
+    : !prochaine
+    ? "Semaine bouclée. Tout le reste, c’est du bonus."
+    : stats.nCetteSemaine === 0
+    ? "Nouvelle semaine, page blanche. On s’y met ?"
+    : `Encore ${reste} séance${reste > 1 ? "s" : ""} pour boucler la semaine.`;
+
+  const lundi = depuisCle(lundiDe(auj));
+  const jours = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lundi);
+    d.setDate(d.getDate() + i);
+    return cleJour(d);
+  });
 
   return (
-    <div key={profil} className="vue space-y-5">
+    <div key={profil} className="vue space-y-7">
       <div>
-        <p className="text-xs uppercase tracking-widest text-accent font-bold transi">{dateFr}</p>
-        <h2 className="text-2xl font-extrabold tracking-tight mt-1">
-          Salut {nom} !
-        </h2>
-        <p className="text-brume text-sm mt-1">{p.detail || NIVEAUX[p.niveau || "standard"].detail} — on avance à ton rythme.</p>
-      </div>
+        <p className="text-[13px] font-semibold text-brume first-letter:uppercase">{FORMAT_JOUR.format(new Date())}</p>
+        <h1 className="titre-xl mt-1.5">Salut {nom}</h1>
+        <p className="text-douce text-[15px] mt-2 leading-snug">{phrase}</p>
 
-      {/* assiduité */}
-      <section className="rounded-3xl bg-carte border border-ligne p-5">
-        <div className="flex items-center gap-5">
-          <Anneau
-            fait={stats.nCetteSemaine}
-            total={progActuel.seances.length}
-          />
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
-                <Dumbbell size={19} className="text-accent transi" />
-              </span>
-              <div>
-                <p className="text-xl font-extrabold chiffres leading-none">{stats.total}</p>
-                <p className="text-brume text-xs mt-0.5">séances au total</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
-                <Flame size={19} className="text-accent transi" />
-              </span>
-              <div>
-                <p className="text-xl font-extrabold chiffres leading-none">{stats.serie}</p>
-                <p className="text-brume text-xs mt-0.5">
-                  semaine{stats.serie > 1 ? "s" : ""} d’affilée
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="mt-5 pt-4 border-t border-ligne">
-          <Barres barres={stats.barres} />
-        </div>
-      </section>
-
-      {/* programme */}
-      <section>
-        <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
-          Mon programme
-        </h3>
-        <div className="space-y-2">
-          {programmes.map((prog) => {
-            const actif = progActuel.id === prog.id;
+        {/* la semaine en un coup d'œil */}
+        <div className="mt-5 grid grid-cols-7 gap-1">
+          {jours.map((j, i) => {
+            const n = stats.jours[j] || 0;
+            const ajd = j === auj;
+            const futur = j > auj;
             return (
-              <div
-                key={prog.id}
-                className={`w-full rounded-2xl bg-carte border p-1 flex items-center transi ${
-                  actif ? "bordure-accent-douce" : "border-ligne"
-                }`}
-              >
-                <button
-                  onClick={() => surMode(prog.id)}
-                  className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left"
+              <div key={j} className="flex flex-col items-center gap-1.5">
+                <span className={`text-[11px] font-semibold ${ajd ? "text-accent" : "text-sourd"}`}>{"LMMJVSD"[i]}</span>
+                <span
+                  className={`h-9 w-9 rounded-full flex items-center justify-center text-[14px] font-bold chiffres transi ${
+                    n ? "bg-accent text-accent-ink" : ajd ? "contour-accent text-encre" : futur ? "text-sourd" : "text-douce"
+                  }`}
                 >
-                  <span
-                    className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transi ${
-                      actif ? "bg-accent border-transparent" : "border-slate-600"
-                    }`}
-                  >
-                    {actif && <Check size={13} strokeWidth={4} className="text-accent-ink" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`font-bold text-sm block ${actif ? "" : "text-douce"}`}>{prog.nom}</span>
-                    <span className="text-brume text-xs block truncate">
-                      {prog.seances.map((s) => s.titre.split(" — ").pop()).join(" · ")}
-                    </span>
-                  </span>
-                </button>
-                {prog.perso && (
-                  <>
-                    <button
-                      onClick={() => surPartager(prog.id)}
-                      aria-label={`Partager le programme ${prog.nom}`}
-                      className="h-11 w-10 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transi"
-                    >
-                      <Share2 size={16} className="text-brume" />
-                    </button>
-                    <button
-                      onClick={() => surEditer(prog.id)}
-                      aria-label={`Modifier le programme ${prog.nom}`}
-                      className="h-11 w-10 rounded-xl flex items-center justify-center shrink-0 mr-1 active:scale-95 transi"
-                    >
-                      <Pencil size={16} className="text-brume" />
-                    </button>
-                  </>
-                )}
+                  {Number(j.slice(8))}
+                </span>
+                <span className={`h-1 w-1 rounded-full ${n > 1 ? "bg-accent" : "bg-transparent"}`} />
               </div>
             );
           })}
-          <div className="flex gap-2">
-            <button
-              onClick={surCreer}
-              className="flex-1 h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-            >
-              <Plus size={17} /> Créer un programme
-            </button>
-            {syncEtat === "ok" && (
-              <button
-                onClick={surImporter}
-                aria-label="Importer un programme partagé"
-                className="h-12 px-4 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-              >
-                <Download size={16} /> Importer
-              </button>
-            )}
-          </div>
-          {nbCorbeille > 0 && (
-            <button
-              onClick={surCorbeille}
-              className="w-full h-11 rounded-2xl bg-carte border border-ligne text-brume text-xs font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-            >
-              <Trash2 size={14} />
-              Corbeille · {nbCorbeille} programme{nbCorbeille > 1 ? "s" : ""} récupérable{nbCorbeille > 1 ? "s" : ""}
-            </button>
-          )}
         </div>
-        <p className="text-brume text-xs mt-2 leading-relaxed">{progActuel.description}</p>
-      </section>
+      </div>
 
-      {/* séances */}
-      <section>
-        <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-3">
-          Mes séances de la semaine
-        </h3>
-        <div className="space-y-3">
-          {progActuel.seances.map((s) => {
-            const faite = stats.cetteSemaine.has(s.id);
-            const enCours = !faite && seanceDemarree(normaliserSeance(donnees.seances[s.id]));
-            return (
+      {/* la prochaine séance, en grand */}
+      {prochaine ? (
+        <CarteProchaine
+          seance={prochaine}
+          etat={normaliserSeance(donnees.seances[prochaine.id])}
+          enCours={!!enCours}
+          surOuvrir={() => surOuvrir(prochaine.id)}
+        />
+      ) : (
+        <section className="rounded-4xl degrade-heros p-6 text-center">
+          <Anneau fait={1} total={1} taille={84} epaisseur={8}>
+            <Check size={30} strokeWidth={3} className="text-accent transi" />
+          </Anneau>
+          <h2 className="titre-l mt-4">Objectif atteint</h2>
+          <p className="text-brume text-sm mt-1.5 leading-relaxed">
+            {stats.nCetteSemaine} séance{stats.nCetteSemaine > 1 ? "s" : ""} cette semaine. Envie de rab ? Refais
+            celle de ton choix.
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {progActuel.seances.map((s) => (
               <button
                 key={s.id}
                 onClick={() => surOuvrir(s.id)}
-                className="w-full rounded-2xl bg-carte border border-ligne p-4 flex items-center gap-4 text-left active:scale-98 transi"
+                className="h-10 px-4 rounded-full bg-carte2 text-sm font-bold active:scale-95 transi"
               >
-                <span
-                  className={`h-12 w-12 rounded-xl flex items-center justify-center text-xl font-extrabold shrink-0 transi ${
-                    faite ? "bg-accent text-accent-ink" : "bg-accent-soft text-accent"
-                  }`}
-                >
-                  {faite ? <Check size={26} strokeWidth={3} /> : s.badge}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="font-bold text-base block">{s.titre}</span>
-                  <span className="text-brume text-xs block truncate mt-0.5">{s.resume}</span>
-                </span>
-                <span
-                  className={`text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0 transi ${
-                    faite
-                      ? "bg-accent-soft text-accent"
-                      : enCours
-                      ? "bg-carte2 text-encre"
-                      : "bg-carte2 text-brume"
-                  }`}
-                >
-                  {faite ? "Faite" : enCours ? "En cours" : "À faire"}
-                </span>
+                {decouperTitre(s.titre)[1]}
               </button>
-            );
-          })}
-        </div>
-        <p className="text-brume text-xs mt-3 leading-relaxed">
-          L’ordre est libre, avec au moins un jour de repos entre deux séances.
-          Chaque séance dure 45 à 60 min. Oublié de valider ? Une séance commencée se valide
-          toute seule à sa date, le lendemain. Validée par erreur ? Ouvre-la pour l’annuler, ou
-          passe par l’onglet Historique.
-        </p>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* mesures */}
-      <section className="rounded-3xl bg-carte border border-ligne p-5">
-        <div className="flex items-center gap-3 mb-4">
-          <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center transi">
-            <Ruler size={19} className="text-accent transi" />
+      {/* chiffres de la semaine */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <button onClick={surJournal} className="surface rounded-3xl p-3.5 text-left active:scale-98 transi">
+          <Anneau fait={stats.nCetteSemaine} total={objectif} taille={40} epaisseur={5} />
+          <p className="mt-3 text-[20px] font-extrabold chiffres leading-none">
+            {stats.nCetteSemaine}<span className="text-brume text-sm font-bold">/{objectif}</span>
+          </p>
+          <p className="text-[11px] text-brume mt-1 leading-tight">cette semaine</p>
+        </button>
+        <div className="surface rounded-3xl p-3.5">
+          <span className="h-10 w-10 rounded-full bg-accent-soft flex items-center justify-center transi">
+            <Flame size={19} className="text-accent transi" />
           </span>
-          <div>
-            <h3 className="font-bold text-base leading-none">Mes repères</h3>
-            <p className="text-brume text-xs mt-1">Ajustables quand tu veux</p>
-          </div>
-        </div>
-        <label className="block mb-3">
-          <span className="text-xs text-brume block mb-1.5">Prénom</span>
-          <input
-            type="text"
-            value={donnees.mesures.nom || ""}
-            onChange={(e) => surMesure("nom", e.target.value)}
-            placeholder={p.nom}
-            className="w-full rounded-xl bg-carte2 px-3 text-center font-extrabold text-base outline-none placeholder-slate-600"
-            style={{ height: 48 }}
-            aria-label="Prénom"
-          />
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {[["age", "Âge", "ans"], ["taille", "Taille", "cm"], ["poids", "Poids", "kg"]].map(
-            ([champ, etiquette, unite]) => (
-              <label key={champ} className="block">
-                <span className="text-xs text-brume block mb-1.5">{etiquette}</span>
-                <span className="flex items-baseline gap-1 rounded-xl bg-carte2 px-3" style={{ height: 48 }}>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={donnees.mesures[champ] || ""}
-                    onChange={(e) => surMesure(champ, e.target.value)}
-                    placeholder="—"
-                    className="w-full min-w-0 bg-transparent text-center font-extrabold chiffres text-base outline-none placeholder-slate-600"
-                    style={{ height: 46 }}
-                    aria-label={`${etiquette} (${unite})`}
-                  />
-                  <span className="text-xs text-brume shrink-0">{unite}</span>
-                </span>
-              </label>
-            )
-          )}
-        </div>
-        <p className="text-brume text-xs mt-3 leading-relaxed">
-          Le poids n’est qu’un repère parmi d’autres — les séances faites et les charges qui
-          montent racontent mieux l’histoire.
-        </p>
-
-        {/* niveau : détermine les charges conseillées sur chaque exercice */}
-        <div className="mt-4 pt-4 border-t border-ligne">
-          <span className="text-xs text-brume block mb-1.5">Mon niveau de charges</span>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(NIVEAUX).map(([id, n]) => (
-              <button
-                key={id}
-                onClick={() => surMajProfil({ niveau: id })}
-                aria-pressed={(p.niveau || "standard") === id}
-                className={`rounded-xl px-3 py-2 text-left transi ${
-                  (p.niveau || "standard") === id ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
-                }`}
-              >
-                <span className="block text-sm font-bold">{n.nom}</span>
-                <span className={`block text-xs mt-0.5 ${(p.niveau || "standard") === id ? "opacity-75" : "text-brume"}`}>
-                  {n.detail}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <span className="text-xs text-brume block mt-4 mb-1.5">Ma couleur</span>
-          <div className="flex gap-2">
-            {ACCENTS.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => surMajProfil({ accent: a.id })}
-                aria-label={a.nom}
-                aria-pressed={(p.accent || "lime") === a.id}
-                className={`h-10 w-10 rounded-full pastille-${a.id} flex items-center justify-center active:scale-95 transi ${
-                  (p.accent || "lime") === a.id ? "ring-2 ring-offset-2 ring-offset-carte ring-white" : "opacity-60"
-                }`}
-              >
-                {(p.accent || "lime") === a.id && <Check size={17} strokeWidth={3.5} className="text-fond" />}
-              </button>
-            ))}
-          </div>
-
-          {profils.length > 1 && (
-            <div className="mt-4 flex items-center gap-2">
-              <span className="text-brume text-xs flex-1">
-                Supprimer ce profil et toutes ses données :
-              </span>
-              <BoutonSuppression etiquette="Supprimer ce profil" surConfirmer={surSupprimerProfil} />
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* note dédiée */}
-      {noteOsseuse ? (
-        <section className="rounded-2xl bg-carte border bordure-accent-douce p-4 flex gap-3">
-          <HeartPulse size={20} className="text-accent shrink-0 mt-0.5" />
-          <p className="text-sm leading-relaxed text-douce">
-            <strong className="text-encre">Le renfo, ta meilleure alliée.</strong> Il entretient la
-            densité osseuse et le muscle — exactement ce qu’il faut à {age} ans. Machines assises,
-            cardio sans impact, et zéro pression : la douceur d’abord, toujours.
+          <p className="mt-3 text-[20px] font-extrabold chiffres leading-none">{stats.serie}</p>
+          <p className="text-[11px] text-brume mt-1 leading-tight">
+            semaine{stats.serie > 1 ? "s" : ""} d’affilée
           </p>
-        </section>
-      ) : (
-        <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
-          <TrendingUp size={20} className="text-accent shrink-0 mt-0.5" />
-          <p className="text-sm leading-relaxed text-douce">
-            <strong className="text-encre">Ta force, c’est la régularité.</strong> Charge après
-            charge, note tout : dans 8 semaines, tu relèveras ces chiffres avec un grand sourire.
-          </p>
-        </section>
-      )}
+        </div>
+        <div className="surface rounded-3xl p-3.5">
+          <span className="h-10 w-10 rounded-full bg-accent-soft flex items-center justify-center transi">
+            <Zap size={18} className="text-accent transi" />
+          </span>
+          <p className="mt-3 text-[20px] font-extrabold chiffres leading-none">{formatNombre(stats.kcalSemaine)}</p>
+          <p className="text-[11px] text-brume mt-1 leading-tight">kcal dépensées</p>
+        </div>
+      </div>
 
-      {/* espace encore ouvert à tous : proposer de poser un code */}
+      {/* espace encore ouvert à tous */}
       {syncEtat === "ok" && espace && espace.protege === false && (
-        <CarteProtection surDefinirCode={surDefinirCode} />
+        <button onClick={surProfil} className="w-full surface rounded-3xl p-4 flex items-center gap-3 text-left active:scale-98 transi">
+          <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0">
+            <ShieldCheck size={18} className="text-accent transi" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-bold">Protège ton espace</span>
+            <span className="block text-xs text-brume mt-0.5">Il n’a pas encore de code d’accès</span>
+          </span>
+          <ChevronRight size={18} className="text-sourd" />
+        </button>
       )}
 
-      <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
-        {syncEtat === "ok" ? (
-          <>
-            <Cloud size={20} className="text-accent shrink-0 mt-0.5 transi" />
-            <p className="text-xs leading-relaxed text-brume">
-              <strong className="text-douce">Synchro activée.</strong> Vos téléphones voient les
-              mêmes données : séances validées, charges, programmes — espace
-              {espace ? ` « ${espace.nom} »` : ""}.
-            </p>
-          </>
-        ) : (
-          <>
-            <CloudOff size={20} className="text-brume shrink-0 mt-0.5" />
-            <p className="text-xs leading-relaxed text-brume">
-              <strong className="text-douce">Synchro non configurée.</strong> Les données restent
-              sur cet appareil. Pour voir les séances de l’autre depuis ton téléphone, active le
-              stockage sur Vercel (voir le README du projet) — 2 minutes, gratuit.
-            </p>
-          </>
-        )}
-      </section>
-
-      <section className="rounded-2xl bg-carte border border-ligne p-4 flex gap-3">
-        <Stethoscope size={20} className="text-brume shrink-0 mt-0.5" />
-        <p className="text-xs leading-relaxed text-brume">
-          Avant de commencer, un avis médical est recommandé — surtout pour une reprise après une
-          longue pause. Voir l’onglet Conseils.
+      {/* les séances de la semaine */}
+      <Section titre="Cette semaine" action="Changer de programme" surAction={surProgrammes}>
+        <ListeSeances seances={progActuel.seances} donnees={donnees} stats={stats} surOuvrir={surOuvrir} />
+        <p className="text-sourd text-xs mt-3 px-1 leading-relaxed">
+          {progActuel.nom} · l’ordre est libre, avec un jour de repos entre deux séances. Oublié de
+          valider ? Une séance commencée se valide toute seule à sa date.
         </p>
-      </section>
+      </Section>
+    </div>
+  );
+}
+
+/* Carte « prochaine séance » : titre en grand, muscles, bouton principal */
+function CarteProchaine({ seance, etat, enCours, surOuvrir }) {
+  const [etiquette, titre] = decouperTitre(seance.titre);
+  const muscles = [...new Set(seance.exos.flatMap((e) => e.muscles || []))];
+  const nbEtapes = seance.exos.length + etat.ajouts.length + (seance.cardio ? 1 : 0) + 2;
+  const nFait = Object.values(etat.coches).filter((v) => v === true).length;
+  return (
+    <section className="rounded-4xl degrade-heros p-5 relative overflow-hidden">
+      <div className="flex items-center gap-2 text-xs font-bold text-accent transi">
+        <span className={`h-2 w-2 rounded-full bg-accent ${enCours ? "pulsation" : ""}`} />
+        {enCours ? "En cours" : "Prochaine séance"}
+        {etiquette && <span className="text-brume font-semibold">· {etiquette}</span>}
+      </div>
+      <div className="mt-2 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-[28px] font-extrabold leading-[1.05] tracking-[-0.03em]">{titre}</h2>
+          <p className="text-sm text-douce mt-2 leading-snug">{seance.resume}</p>
+        </div>
+        <SchemaMuscles muscles={muscles} hauteur={74} />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-semibold text-brume">
+        <span className="flex items-center gap-1.5">
+          <Dumbbell size={13} /> {seance.exos.length} exercice{seance.exos.length > 1 ? "s" : ""}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Clock size={13} /> {seance.tabata ? "≈ 20 min" : "45–60 min"}
+        </span>
+        <span className="flex items-center gap-1.5 first-letter:uppercase">
+          <Activity size={13} /> {seance.sousTitre}
+        </span>
+      </div>
+      {enCours && (
+        <div className="mt-4">
+          <div className="h-1.5 rounded-full bg-carte3 overflow-hidden">
+            <div className="h-full rounded-full bg-accent barre" style={{ width: `${(nFait / nbEtapes) * 100}%` }} />
+          </div>
+          <p className="text-[11px] text-brume mt-1.5 chiffres">{nFait}/{nbEtapes} étapes</p>
+        </div>
+      )}
+      <button
+        onClick={surOuvrir}
+        className="mt-5 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base flex items-center justify-center gap-2 active:scale-98 transi lueur-accent"
+      >
+        <Play size={18} strokeWidth={2.6} className="fill-current" />
+        {enCours ? "Reprendre la séance" : "Commencer la séance"}
+      </button>
+    </section>
+  );
+}
+
+/* Liste compacte des séances d'un programme, avec leur état de la semaine */
+function ListeSeances({ seances, donnees, stats, surOuvrir }) {
+  return (
+    <div className="surface rounded-3xl divide-y divide-ligne overflow-hidden">
+      {seances.map((s) => {
+        const faite = stats.cetteSemaine.has(s.id);
+        const enCours = !faite && seanceDemarree(normaliserSeance(donnees.seances[s.id]));
+        const [, titre] = decouperTitre(s.titre);
+        return (
+          <button
+            key={s.id}
+            onClick={() => surOuvrir(s.id)}
+            className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-carte2 transi"
+          >
+            <span
+              className={`h-11 w-11 rounded-[14px] flex items-center justify-center text-[15px] font-extrabold shrink-0 transi ${
+                faite ? "bg-accent text-accent-ink" : enCours ? "bg-accent-soft text-accent" : "bg-carte2 text-douce"
+              }`}
+            >
+              {faite ? <Check size={20} strokeWidth={3} /> : s.badge}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="font-bold text-[15px] block truncate">{titre}</span>
+              <span className="text-brume text-xs block truncate mt-0.5">{s.resume}</span>
+            </span>
+            <span
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 transi ${
+                faite ? "bg-accent-soft text-accent" : enCours ? "bg-carte3 text-encre" : "text-sourd"
+              }`}
+            >
+              {faite ? "Faite" : enCours ? "En cours" : "À faire"}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Vue « Progrès » : évolution des charges par exercice               */
+/* Programmes                                                          */
+/* ------------------------------------------------------------------ */
+
+function VueProgrammes({
+  profil, programmes, progActuel, stats, syncEtat, corbeille = [],
+  surMode, surOuvrir, surPartager, surImporter, surCreer, surEditer, surCorbeille,
+}) {
+  const nbCorbeille = purgerCorbeille(corbeille).length;
+  const autres = programmes.filter((p) => p.id !== progActuel.id);
+  const persos = autres.filter((p) => p.perso);
+  const base = autres.filter((p) => !p.perso);
+  const carte = (prog, actif) => (
+    <CarteProgramme
+      key={prog.id}
+      prog={prog}
+      actif={actif}
+      stats={stats}
+      surChoisir={() => surMode(prog.id)}
+      surOuvrir={surOuvrir}
+      surPartager={() => surPartager(prog.id)}
+      surEditer={() => surEditer(prog.id)}
+    />
+  );
+
+  return (
+    <div key={profil} className="vue space-y-7">
+      <div>
+        <h1 className="titre-xl">Programmes</h1>
+        <p className="text-douce text-[15px] mt-2 leading-snug">Choisis celui de la semaine, ou compose le tien.</p>
+        <div className={`mt-5 grid gap-2.5 ${syncEtat === "ok" ? "grid-cols-2" : "grid-cols-1"}`}>
+          <button
+            onClick={surCreer}
+            className="h-[52px] rounded-2xl bg-accent text-accent-ink font-extrabold text-[15px] flex items-center justify-center gap-2 active:scale-98 transi lueur-accent"
+          >
+            <Plus size={18} strokeWidth={2.6} /> Créer
+          </button>
+          {syncEtat === "ok" && (
+            <button
+              onClick={surImporter}
+              aria-label="Importer un programme partagé"
+              className="h-[52px] rounded-2xl surface-2 font-bold text-[15px] flex items-center justify-center gap-2 active:scale-98 transi"
+            >
+              <Download size={17} /> Importer
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Section titre="En ce moment">{carte(progActuel, true)}</Section>
+
+      {persos.length > 0 && (
+        <Section titre="Mes programmes">
+          <div className="space-y-3">{persos.map((p) => carte(p, false))}</div>
+        </Section>
+      )}
+
+      {base.length > 0 && (
+        <Section titre="Programmes du coach">
+          <div className="space-y-3">{base.map((p) => carte(p, false))}</div>
+        </Section>
+      )}
+
+      {nbCorbeille > 0 && (
+        <button
+          onClick={surCorbeille}
+          className="w-full h-12 rounded-2xl surface text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+        >
+          <Trash2 size={15} />
+          Corbeille · {nbCorbeille} programme{nbCorbeille > 1 ? "s" : ""} récupérable{nbCorbeille > 1 ? "s" : ""}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CarteProgramme({ prog, actif, stats, surChoisir, surOuvrir, surPartager, surEditer }) {
+  const n = prog.seances.length;
+  return (
+    <div className={`rounded-4xl p-5 transi ${actif ? "degrade-heros" : "surface"}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          {actif && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-accent uppercase tracking-wider mb-1.5 transi">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Programme actif
+            </span>
+          )}
+          <h3 className="text-[19px] font-extrabold tracking-tight leading-tight">{prog.nom}</h3>
+          <p className={`text-brume text-[13px] mt-1 leading-snug ${actif ? "" : "line-clamp-2"}`}>
+            {prog.perso ? `Programme perso · ${n} séance${n > 1 ? "s" : ""}` : prog.description}
+          </p>
+        </div>
+        {prog.perso && (
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={surPartager}
+              aria-label={`Partager le programme ${prog.nom}`}
+              className="h-10 w-10 rounded-full bg-carte2 flex items-center justify-center active:scale-95 transi"
+            >
+              <Share2 size={16} className="text-douce" />
+            </button>
+            <button
+              onClick={surEditer}
+              aria-label={`Modifier le programme ${prog.nom}`}
+              className="h-10 w-10 rounded-full bg-carte2 flex items-center justify-center active:scale-95 transi"
+            >
+              <Pencil size={16} className="text-douce" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {actif ? (
+        <div className="mt-4 space-y-2">
+          {prog.seances.map((s) => {
+            const faite = stats.cetteSemaine.has(s.id);
+            const [, titre] = decouperTitre(s.titre);
+            return (
+              <button
+                key={s.id}
+                onClick={() => surOuvrir(s.id)}
+                className="w-full rounded-2xl bg-carte2 px-3 py-2.5 flex items-center gap-3 text-left active:scale-98 transi"
+              >
+                <span
+                  className={`h-9 w-9 rounded-xl flex items-center justify-center text-sm font-extrabold shrink-0 transi ${
+                    faite ? "bg-accent text-accent-ink" : "bg-carte3 text-douce"
+                  }`}
+                >
+                  {faite ? <Check size={17} strokeWidth={3} /> : s.badge}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold truncate">{titre}</span>
+                  <span className="block text-xs text-brume truncate">{s.resume}</span>
+                </span>
+                <ChevronRight size={17} className="text-sourd shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div className="mt-3.5 flex flex-wrap gap-1.5">
+            {prog.seances.map((s) => (
+              <span key={s.id} className="px-2.5 py-1 rounded-full bg-carte2 text-xs font-semibold text-douce">
+                {decouperTitre(s.titre)[1]}
+              </span>
+            ))}
+          </div>
+          <button
+            onClick={surChoisir}
+            className="mt-4 w-full h-12 rounded-2xl bg-carte2 text-sm font-bold active:scale-98 transi"
+          >
+            Choisir ce programme
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Profil : repères, niveau, couleur, espace, conseils                 */
+/* ------------------------------------------------------------------ */
+
+function ChampLigne({ libelle, valeur, placeholder, unite, numerique, surChange }) {
+  return (
+    <label className="flex items-center gap-3 px-4 min-h-[56px]">
+      <span className="text-[15px] font-semibold flex-1">{libelle}</span>
+      <input
+        type="text"
+        inputMode={numerique ? "decimal" : "text"}
+        value={valeur}
+        onChange={(e) => surChange(e.target.value)}
+        placeholder={placeholder || "—"}
+        className="w-36 min-w-0 bg-transparent text-right text-[15px] font-bold chiffres outline-none placeholder-sourd"
+        aria-label={unite ? `${libelle} (${unite})` : libelle}
+      />
+      {unite && <span className="text-sm text-brume w-7 shrink-0">{unite}</span>}
+    </label>
+  );
+}
+
+function VueProfil({
+  profil, profilObj, profils, donnees, espace, syncEtat,
+  surMesure, surMajProfil, surSupprimerProfil, surAjouterProfil, surDefinirCode, surChangerEspace,
+}) {
+  const p = profilObj;
+  const nom = nomAffiche(donnees, p);
+  const niveau = p.niveau || "standard";
+  const accent = p.accent || "lime";
+  const age = parseCharge(donnees.mesures.age);
+  /* le conseil « densité osseuse » n'a de sens qu'après 50 ans */
+  const noteOsseuse = age != null && age >= 50;
+  const n = donnees.historique.length;
+
+  return (
+    <div key={profil} className="vue space-y-7">
+      <div className="flex flex-col items-center text-center pt-1">
+        <span
+          className={`h-24 w-24 rounded-full pastille-${accent} text-fond flex items-center justify-center text-[40px] font-extrabold transi`}
+          style={{ boxShadow: "0 16px 40px -12px var(--accent-bordure)" }}
+        >
+          {nom.charAt(0).toUpperCase()}
+        </span>
+        <h1 className="titre-l mt-4">{nom}</h1>
+        <p className="text-brume text-sm mt-1">
+          {NIVEAUX[niveau].nom} · {n} séance{n > 1 ? "s" : ""} au compteur
+        </p>
+      </div>
+
+      <Section titre="Mes repères">
+        <div className="surface rounded-3xl divide-y divide-ligne">
+          <ChampLigne libelle="Prénom" valeur={donnees.mesures.nom || ""} placeholder={p.nom} surChange={(v) => surMesure("nom", v)} />
+          <ChampLigne libelle="Âge" unite="ans" numerique valeur={donnees.mesures.age || ""} surChange={(v) => surMesure("age", v)} />
+          <ChampLigne libelle="Taille" unite="cm" numerique valeur={donnees.mesures.taille || ""} surChange={(v) => surMesure("taille", v)} />
+          <ChampLigne libelle="Poids" unite="kg" numerique valeur={donnees.mesures.poids || ""} surChange={(v) => surMesure("poids", v)} />
+        </div>
+        <p className="text-sourd text-xs mt-2.5 px-1 leading-relaxed">
+          Le poids n’est qu’un repère parmi d’autres — les séances faites et les charges qui
+          montent racontent mieux l’histoire. Il sert aussi à estimer l’énergie dépensée.
+        </p>
+      </Section>
+
+      <Section titre="Niveau de charges">
+        <div className="grid grid-cols-2 gap-2.5">
+          {Object.entries(NIVEAUX).map(([id, nv]) => {
+            const choisi = niveau === id;
+            return (
+              <button
+                key={id}
+                onClick={() => surMajProfil({ niveau: id })}
+                aria-pressed={choisi}
+                className={`rounded-3xl p-4 text-left transi ${choisi ? "degrade-heros contour-accent" : "surface"}`}
+              >
+                <span className={`h-5 w-5 rounded-full flex items-center justify-center transi ${choisi ? "bg-accent" : "border-2 border-carte3"}`}>
+                  {choisi && <Check size={12} strokeWidth={4} className="text-accent-ink" />}
+                </span>
+                <span className="block text-[15px] font-bold mt-3">{nv.nom}</span>
+                <span className="block text-xs text-brume mt-1 leading-snug">{nv.detail}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-sourd text-xs mt-2.5 px-1 leading-relaxed">
+          Il règle les charges et les réglages cardio conseillés sur chaque exercice.
+        </p>
+      </Section>
+
+      <Section titre="Ma couleur">
+        <div className="surface rounded-3xl p-4 flex justify-between">
+          {ACCENTS.map((a) => {
+            const choisi = accent === a.id;
+            return (
+              <button
+                key={a.id}
+                onClick={() => surMajProfil({ accent: a.id })}
+                aria-label={a.nom}
+                aria-pressed={choisi}
+                data-accent={a.id}
+                className={`h-11 w-11 rounded-full pastille-${a.id} flex items-center justify-center active:scale-95 transi ${
+                  choisi ? "anneau-accent" : "scale-90"
+                }`}
+              >
+                {choisi && <Check size={18} strokeWidth={3.5} className="text-fond" />}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section titre="Espace">
+        <div className="surface rounded-3xl divide-y divide-ligne overflow-hidden">
+          <Ligne
+            icone={syncEtat === "ok" ? Cloud : CloudOff}
+            libelle={espace ? espace.nom : "Sur cet appareil"}
+            detail={
+              syncEtat === "ok"
+                ? "Synchronisé : vos téléphones voient les mêmes données"
+                : "Données sur cet appareil uniquement"
+            }
+          />
+          {syncEtat === "ok" && espace && espace.protege !== false && (
+            <Ligne icone={ShieldCheck} libelle="Protégé par un code" detail="Demandé une seule fois par téléphone" />
+          )}
+          {espace && (
+            <Ligne icone={LogOut} libelle="Changer d’espace" surClic={surChangerEspace}>
+              <ChevronRight size={18} className="text-sourd" />
+            </Ligne>
+          )}
+        </div>
+        {syncEtat === "ok" && espace && espace.protege === false && (
+          <div className="mt-3">
+            <CarteProtection surDefinirCode={surDefinirCode} />
+          </div>
+        )}
+        {syncEtat !== "ok" && (
+          <p className="text-sourd text-xs mt-2.5 px-1 leading-relaxed">
+            Pour voir les séances des autres depuis ton téléphone, active le stockage sur Vercel
+            (voir le README du projet) — 2 minutes, gratuit.
+          </p>
+        )}
+      </Section>
+
+      {noteOsseuse && (
+        <section className="rounded-3xl degrade-heros p-4 flex gap-3">
+          <HeartPulse size={20} className="text-accent shrink-0 mt-0.5 transi" />
+          <p className="text-sm leading-relaxed text-douce">
+            <strong className="text-encre">Le renfo, ton meilleur allié.</strong> Il entretient la
+            densité osseuse et le muscle — exactement ce qu’il faut à {age} ans. Machines assises,
+            cardio sans impact, et zéro pression : la douceur d’abord, toujours.
+          </p>
+        </section>
+      )}
+
+      <Section titre="Conseils du coach">
+        <div className="surface rounded-3xl divide-y divide-ligne overflow-hidden">
+          {CONSEILS.map((c) => (
+            <Accordeon
+              key={c.id}
+              icone={c.icone}
+              titre={c.titre}
+              texte={c.texte}
+              accent={niveau === "doux" && c.id === "cinquante-quatre"}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <Section titre="Profils">
+        <div className="surface rounded-3xl divide-y divide-ligne overflow-hidden">
+          {profils.length < 6 && (
+            <Ligne icone={UserPlus} libelle="Ajouter un profil" detail="Un prénom, une couleur, un niveau" surClic={surAjouterProfil}>
+              <ChevronRight size={18} className="text-sourd" />
+            </Ligne>
+          )}
+          {profils.length > 1 && (
+            <Ligne icone={Trash2} danger libelle="Supprimer ce profil" detail="Avec toutes ses données">
+              <BoutonSuppression etiquette="Supprimer ce profil" surConfirmer={surSupprimerProfil} />
+            </Ligne>
+          )}
+        </div>
+      </Section>
+
+      <p className="text-sourd text-center text-xs leading-relaxed px-4">
+        Avant de commencer, un avis médical est recommandé — surtout pour une reprise après une
+        longue pause. Ce programme ne le remplace pas.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Minuteur de repos flottant & fête de fin de séance                  */
+/* ------------------------------------------------------------------ */
+
+function MinuteurRepos({ minuteur, reste, surProlonger, surArreter }) {
+  const fini = reste <= 0;
+  return (
+    <div className="fixed left-3 right-3 z-40 mx-auto max-w-md barre-flottante surgit" role="timer">
+      <div className="verre rounded-[26px] p-2 pl-2.5 flex items-center gap-3">
+        {fini ? (
+          <>
+            <span className="h-12 w-12 rounded-full bg-accent flex items-center justify-center shrink-0 pop">
+              <Sparkles size={20} className="text-accent-ink" />
+            </span>
+            <p className="font-extrabold flex-1">Repos terminé — à toi !</p>
+            <button
+              onClick={surArreter}
+              aria-label="Fermer"
+              className="h-11 w-11 rounded-full bg-carte2 flex items-center justify-center shrink-0 active:scale-95 transi"
+            >
+              <X size={18} className="text-brume" />
+            </button>
+          </>
+        ) : (
+          <>
+            <Anneau fait={reste} total={minuteur.total} taille={48} epaisseur={4}>
+              <Timer size={16} className="text-accent transi" />
+            </Anneau>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-brume truncate">Repos · {minuteur.label}</p>
+              <p className="text-[24px] font-extrabold chiffres leading-tight tracking-tight">
+                {Math.floor(reste / 60)}:{String(reste % 60).padStart(2, "0")}
+              </p>
+            </div>
+            <button
+              onClick={surProlonger}
+              className="h-11 px-3.5 rounded-full bg-carte2 text-sm font-bold flex items-center gap-1 shrink-0 active:scale-95 transi"
+            >
+              <Plus size={15} /> 30 s
+            </button>
+            <button
+              onClick={surArreter}
+              aria-label="Arrêter le repos"
+              className="h-11 w-11 rounded-full bg-carte2 flex items-center justify-center shrink-0 active:scale-95 transi"
+            >
+              <X size={18} className="text-brume" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FeteSeance({ fete, stats, surFermer }) {
+  useVerrouScroll();
+  /* quelques éclats qui jaillissent autour de la coche */
+  const eclats = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => {
+        const a = (i / 16) * Math.PI * 2;
+        const r = 66 + (i % 3) * 20;
+        return { dx: Math.cos(a) * r, dy: Math.sin(a) * r, t: 5 + (i % 4) * 2, d: (i % 5) * 0.05 };
+      }),
+    []
+  );
+  const records = fete.records || [];
+  const message = fete.repeat
+    ? "Deuxième fois cette semaine sur cette séance — double dose, chapeau. Elle compte, évidemment."
+    : MESSAGES_FETE[fete.total % MESSAGES_FETE.length];
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-center justify-center p-5" onClick={surFermer}>
+      <div
+        className="w-full max-w-sm rounded-[32px] degrade-heros p-6 pt-9 text-center surgit"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Séance validée"
+      >
+        <div className="relative mx-auto h-24 w-24">
+          {eclats.map((e, i) => (
+            <span
+              key={i}
+              className="eclat absolute left-1/2 top-1/2 rounded-full bg-accent"
+              style={{
+                width: e.t, height: e.t, marginLeft: -e.t / 2, marginTop: -e.t / 2,
+                "--dx": `${e.dx}px`, "--dy": `${e.dy}px`, animationDelay: `${0.12 + e.d}s`,
+              }}
+            />
+          ))}
+          <span className="relative h-24 w-24 rounded-full bg-accent flex items-center justify-center pop lueur-accent">
+            <Check size={46} strokeWidth={3.2} className="text-accent-ink" />
+          </span>
+        </div>
+        <h2 className="mt-6 titre-l">Séance validée !</h2>
+        <p className="mt-1 text-brume text-sm">{fete.titre}</p>
+        <p className="mt-3 text-douce text-[15px] leading-relaxed">{message}</p>
+
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          {[
+            [Clock, fete.duree ? `${fete.duree}` : "—", fete.duree ? "min" : "", "durée"],
+            [Dumbbell, String(fete.nbExos || 0), "", fete.nbExos > 1 ? "exercices" : "exercice"],
+            [Zap, fete.kcal ? `${fete.kcal}` : "—", fete.kcal ? "kcal" : "", "dépensées"],
+          ].map(([Icone, valeur, unite, libelle]) => (
+            <div key={libelle} className="rounded-2xl bg-carte2 py-3 px-2">
+              <Icone size={15} className="text-accent mx-auto transi" />
+              <p className="mt-1.5 text-[19px] font-extrabold chiffres leading-none">
+                {valeur}
+                {unite && <span className="text-xs text-brume font-bold"> {unite}</span>}
+              </p>
+              <p className="text-[11px] text-brume mt-1">{libelle}</p>
+            </div>
+          ))}
+        </div>
+
+        {records.length > 0 && (
+          <div className="mt-3 rounded-2xl bg-or-doux p-3.5 text-left">
+            <p className="text-or font-extrabold text-sm flex items-center gap-2">
+              <Trophy size={16} /> Nouveau{records.length > 1 ? "x" : ""} record{records.length > 1 ? "s" : ""} !
+            </p>
+            {records.map((r) => (
+              <p key={r.id} className="text-sm mt-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-douce truncate">{r.nom}</span>
+                <span className="font-bold chiffres shrink-0">
+                  {r.charge} kg <span className="text-or">+{r.gain}</span>
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-4 text-sourd text-xs chiffres">
+          {stats.total} séance{stats.total > 1 ? "s" : ""} au total · {stats.nCetteSemaine} cette semaine
+        </p>
+        <button
+          onClick={surFermer}
+          className="mt-5 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
+        >
+          Continuer
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Progrès : chiffres clés, assiduité, records, courbe par exercice    */
 /* ------------------------------------------------------------------ */
 
 function CourbeCharge({ points }) {
   const L = 320;
-  const H = 150;
-  const mgG = 34;
-  const mgB = 22;
-  const mgT = 12;
-  const mgD = 10;
+  const H = 160;
+  const mgG = 30;
+  const mgB = 14;
+  const mgT = 20;
+  const mgD = 12;
   const larg = L - mgG - mgD;
   const haut = H - mgT - mgB;
   const vals = points.map((p) => p.charge);
@@ -4294,16 +4716,20 @@ function CourbeCharge({ points }) {
 
   const ligne = points.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.charge).toFixed(1)}`).join(" ");
   const aire = `${ligne} L ${x(n - 1).toFixed(1)} ${(mgT + haut).toFixed(1)} L ${x(0).toFixed(1)} ${(mgT + haut).toFixed(1)} Z`;
-
-  /* 3 graduations d'axe Y */
   const ticks = [haut0, (haut0 + haut1) / 2, haut1];
 
   return (
     <svg viewBox={`0 0 ${L} ${H}`} width="100%" role="img" aria-label="Évolution de la charge" style={{ display: "block" }}>
+      <defs>
+        <linearGradient id="degrade-courbe" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" className="stop-accent" stopOpacity="0.32" />
+          <stop offset="100%" className="stop-accent" stopOpacity="0" />
+        </linearGradient>
+      </defs>
       {ticks.map((t, i) => (
         <g key={i}>
           <line x1={mgG} y1={y(t)} x2={L - mgD} y2={y(t)} className="grille-progres" />
-          <text x={mgG - 6} y={y(t) + 3} textAnchor="end" className="axe-progres chiffres">
+          <text x={mgG - 7} y={y(t) + 3} textAnchor="end" className="axe-progres chiffres">
             {Math.round(t)}
           </text>
         </g>
@@ -4311,16 +4737,43 @@ function CourbeCharge({ points }) {
       <path d={aire} className="aire-progres" />
       <path d={ligne} className="ligne-progres" fill="none" />
       {points.map((p, i) => (
-        <circle key={i} cx={x(i)} cy={y(p.charge)} r={i === n - 1 ? 5 : 3.5} className="point-progres" />
+        <circle
+          key={i}
+          cx={x(i)}
+          cy={y(p.charge)}
+          r={i === n - 1 ? 5.5 : 3.5}
+          className={i === n - 1 ? "point-final" : "point-progres"}
+        />
       ))}
-      <text x={x(n - 1)} y={y(vals[n - 1]) - 11} textAnchor="middle" className="valeur-progres chiffres">
+      <text
+        x={x(n - 1) > L - 40 ? x(n - 1) + 6 : x(n - 1)}
+        y={y(vals[n - 1]) - 12}
+        textAnchor={x(n - 1) > L - 40 ? "end" : "middle"}
+        className="valeur-progres chiffres"
+      >
         {vals[n - 1]} kg
       </text>
     </svg>
   );
 }
 
-function VueProgres({ profil, historique, dico }) {
+function Tuile({ icone: Icone, valeur, unite, libelle }) {
+  return (
+    <div className="surface rounded-3xl p-4">
+      <span className="h-9 w-9 rounded-full bg-accent-soft flex items-center justify-center transi">
+        <Icone size={17} className="text-accent transi" />
+      </span>
+      <p className="mt-3.5 flex items-baseline gap-1">
+        <span className="chiffre-xl">{valeur}</span>
+        {unite && <span className="text-sm font-bold text-brume">{unite}</span>}
+      </p>
+      <p className="text-xs text-brume mt-1.5 leading-snug">{libelle}</p>
+    </div>
+  );
+}
+
+function VueProgres({ profil, historique, dico, stats, objectif = 3 }) {
+  const [tousRecords, setTousRecords] = useState(false);
   /* série (date, charge) par exercice, à partir des snapshots d'historique */
   const series = useMemo(() => {
     const m = new Map();
@@ -4336,6 +4789,17 @@ function VueProgres({ profil, historique, dico }) {
     }
     return [...m.values()].sort((a, b) => b.points.length - a.points.length);
   }, [historique]);
+
+  /* record de chaque exercice (charge la plus lourde, et quand) */
+  const records = useMemo(() => {
+    const m = new Map();
+    for (const s of series) {
+      let best = null;
+      for (const pt of s.points) if (!best || pt.charge > best.charge) best = pt;
+      if (best) m.set(s.id, { id: s.id, nom: s.nom, charge: best.charge, d: best.d, n: s.points.length });
+    }
+    return [...m.values()].sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : b.charge - a.charge));
+  }, [series]);
 
   /* exercices regroupés par catégorie (pour la roulette), dans l'ordre des zones */
   const categories = useMemo(() => {
@@ -4353,77 +4817,201 @@ function VueProgres({ profil, historique, dico }) {
 
   const [choisi, setChoisi] = useState(null);
   const courant = series.find((s) => s.id === choisi) || series[0] || null;
-
-  if (!series.length) {
-    return (
-      <div key={profil} className="vue rounded-3xl bg-carte border border-ligne p-8 text-center">
-        <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
-          <TrendingUp size={28} className="text-accent transi" />
-        </span>
-        <h3 className="mt-4 font-bold text-base">Ta courbe de force arrive</h3>
-        <p className="text-brume text-sm mt-2 leading-relaxed">
-          Note tes charges pendant les séances : dès qu’un exercice aura été fait deux fois, sa
-          progression s’affichera ici.
-        </p>
-      </div>
-    );
-  }
-
-  const pts = courant.points;
-  const delta = pts.length > 1 ? pts[pts.length - 1].charge - pts[0].charge : 0;
+  const il30 = cleJour(new Date(Date.now() - 29 * 86400000));
+  const volume = stats.volume30 >= 1000
+    ? [String(Math.round(stats.volume30 / 100) / 10).replace(".", ","), "t"]
+    : [formatNombre(stats.volume30), "kg"];
 
   return (
-    <div key={profil} className="vue space-y-4">
-      <p className="text-sm text-brume leading-relaxed">
-        L’évolution de tes charges, exercice par exercice (la série la plus lourde de chaque
-        séance). C’est <strong className="text-douce">ça</strong>, la vraie preuve que ça marche.
-      </p>
+    <div key={profil} className="vue space-y-7">
+      <div>
+        <h1 className="titre-xl">Progrès</h1>
+        <p className="text-douce text-[15px] mt-2 leading-snug">Les chiffres qui prouvent que ça avance.</p>
+      </div>
 
-      {/* roulette de sélection, triée par catégorie */}
-      <RoueExercices categories={categories} choisi={courant.id} surChoisir={setChoisi} />
+      <div className="grid grid-cols-2 gap-2.5">
+        <Tuile icone={CalendarCheck} valeur={stats.n30} libelle={`séance${stats.n30 > 1 ? "s" : ""} sur 30 jours · ${stats.total} au total`} />
+        <Tuile icone={Flame} valeur={stats.serie} unite={stats.serie > 1 ? "sem." : "sem."} libelle="d’affilée avec au moins une séance" />
+        <Tuile icone={Zap} valeur={formatNombre(stats.kcal30)} unite="kcal" libelle="dépensées sur 30 jours (estimation)" />
+        <Tuile icone={Weight} valeur={volume[0]} unite={volume[1]} libelle="soulevés sur 30 jours (charge × reps)" />
+      </div>
 
-      <section className="rounded-3xl bg-carte border border-ligne p-4">
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h3 className="font-bold text-base leading-tight min-w-0 truncate">{courant.nom}</h3>
-          {pts.length > 1 && (
-            <span
-              className={`text-sm font-extrabold chiffres shrink-0 ${
-                delta > 0 ? "text-accent transi" : delta < 0 ? "text-brume" : "text-brume"
-              }`}
-            >
-              {delta > 0 ? "+" : ""}{delta.toLocaleString("fr-FR")} kg
-            </span>
-          )}
+      <Section titre="Assiduité">
+        <div className="surface rounded-3xl p-4 pt-3">
+          <Barres barres={stats.barres} objectif={objectif} />
+          <p className="text-sourd text-xs mt-3 leading-relaxed">
+            Séances par semaine sur 8 semaines. Le pointillé, c’est ton objectif ({objectif}) : les
+            semaines qui l’atteignent sont en pleine couleur.
+          </p>
         </div>
-        {pts.length > 1 ? (
-          <CourbeCharge points={pts} />
-        ) : (
-          <div className="rounded-2xl bg-fond p-5 text-center">
-            <p className="text-2xl font-extrabold chiffres">{pts[0].charge} kg</p>
-            <p className="text-brume text-xs mt-1">
-              Une seule mesure pour l’instant — refais cet exercice pour voir la courbe monter.
+      </Section>
+
+      {series.length === 0 ? (
+        <section className="surface rounded-4xl p-8 text-center">
+          <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
+            <TrendingUp size={28} className="text-accent transi" />
+          </span>
+          <h3 className="mt-4 font-bold text-base">Ta courbe de force arrive</h3>
+          <p className="text-brume text-sm mt-2 leading-relaxed">
+            Note tes charges pendant les séances : dès qu’un exercice aura été fait, ses records et
+            sa progression s’afficheront ici.
+          </p>
+        </section>
+      ) : (
+        <>
+          <Section
+            titre="Records"
+            action={records.length > 5 ? (tousRecords ? "Moins" : `Tout voir (${records.length})`) : null}
+            surAction={() => setTousRecords(!tousRecords)}
+          >
+            <div className="surface rounded-3xl divide-y divide-ligne overflow-hidden">
+              {(tousRecords ? records : records.slice(0, 5)).map((r) => (
+                <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${r.d >= il30 ? "bg-or-doux" : "bg-carte2"}`}>
+                    <Trophy size={16} className={r.d >= il30 ? "text-or" : "text-sourd"} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-bold truncate">{r.nom}</span>
+                    <span className="block text-xs text-brume">
+                      {FORMAT_MINI.format(depuisCle(r.d))}
+                      {r.d >= il30 ? " · récent" : ""}
+                    </span>
+                  </span>
+                  <span className="text-[17px] font-extrabold chiffres shrink-0">
+                    {String(r.charge).replace(".", ",")} <span className="text-xs text-brume font-bold">kg</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section titre="Courbe de charge">
+            {/* roulette de sélection, triée par catégorie */}
+            <RoueExercices categories={categories} choisi={courant.id} surChoisir={setChoisi} />
+            <div className="surface rounded-3xl p-4 mt-2.5">
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <h3 className="font-bold text-[15px] leading-tight min-w-0 truncate">{courant.nom}</h3>
+                {courant.points.length > 1 && (() => {
+                  const delta = courant.points[courant.points.length - 1].charge - courant.points[0].charge;
+                  return (
+                    <span
+                      className={`text-[13px] font-extrabold chiffres shrink-0 px-2 py-0.5 rounded-full ${
+                        delta > 0 ? "bg-accent-soft text-accent" : "bg-carte2 text-brume"
+                      }`}
+                    >
+                      {delta > 0 ? "+" : ""}{delta.toLocaleString("fr-FR")} kg
+                    </span>
+                  );
+                })()}
+              </div>
+              {courant.points.length > 1 ? (
+                <CourbeCharge points={courant.points} />
+              ) : (
+                <div className="rounded-2xl bg-carte2 p-5 text-center">
+                  <p className="chiffre-xl">{courant.points[0].charge} kg</p>
+                  <p className="text-brume text-xs mt-2">
+                    Une seule mesure pour l’instant — refais cet exercice pour voir la courbe monter.
+                  </p>
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-between text-xs text-brume chiffres">
+                <span>
+                  Première : {courant.points[0].charge} kg · {FORMAT_MINI.format(depuisCle(courant.points[0].d))}
+                </span>
+                <span>Dernière : {courant.points[courant.points.length - 1].charge} kg</span>
+              </div>
+            </div>
+            <p className="text-sourd text-xs mt-2.5 px-1 leading-relaxed">
+              La série la plus lourde de chaque séance. Quand tu tiens toutes tes séries au haut de
+              la fourchette, monte d’un cran.
             </p>
-          </div>
-        )}
-        <div className="mt-3 flex items-center justify-between text-xs text-brume chiffres">
-          <span>Première : {pts[0].charge} kg · {FORMAT_MINI.format(depuisCle(pts[0].d))}</span>
-          <span>Dernière : {pts[pts.length - 1].charge} kg</span>
-        </div>
-      </section>
-
-      <p className="text-brume text-center text-xs leading-relaxed">
-        Progresse doucement : quand tu tiens toutes tes séries au haut de la fourchette, monte d’un cran.
-      </p>
+          </Section>
+        </>
+      )}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Vue « Historique »                                                  */
+/* Journal : calendrier du mois et séances passées                     */
 /* ------------------------------------------------------------------ */
+
+function CalendrierMois({ historique, mois, surMois }) {
+  const auj = cleJour();
+  const premier = new Date(mois.a, mois.m, 1);
+  const nbJours = new Date(mois.a, mois.m + 1, 0).getDate();
+  const decalage = (premier.getDay() + 6) % 7;
+  const parJour = {};
+  let kcal = 0, n = 0;
+  for (const h of historique) {
+    const d = depuisCle(h.d);
+    if (d.getFullYear() === mois.a && d.getMonth() === mois.m) {
+      parJour[h.d] = (parJour[h.d] || 0) + 1;
+      kcal += h.kcal || 0;
+      n++;
+    }
+  }
+  const maintenant = new Date();
+  const moisCourant = mois.a === maintenant.getFullYear() && mois.m === maintenant.getMonth();
+  const cases = [...Array(decalage).fill(null), ...Array.from({ length: nbJours }, (_, i) => i + 1)];
+  const libelleMois = FORMAT_MOIS.format(premier);
+
+  return (
+    <section className="surface rounded-4xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => surMois(-1)}
+          aria-label="Mois précédent"
+          className="h-9 w-9 rounded-full bg-carte2 flex items-center justify-center active:scale-95 transi"
+        >
+          <ChevronLeft size={17} className="text-douce" />
+        </button>
+        <p className="flex-1 text-center text-[15px] font-bold first-letter:uppercase">{libelleMois}</p>
+        <button
+          onClick={() => surMois(1)}
+          disabled={moisCourant}
+          aria-label="Mois suivant"
+          className={`h-9 w-9 rounded-full bg-carte2 flex items-center justify-center transi ${moisCourant ? "opacity-30" : "active:scale-95"}`}
+        >
+          <ChevronRight size={17} className="text-douce" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-y-1.5 text-center">
+        {["L", "M", "M", "J", "V", "S", "D"].map((j, i) => (
+          <span key={i} className="text-[11px] font-semibold text-sourd pb-1">{j}</span>
+        ))}
+        {cases.map((jour, i) => {
+          if (!jour) return <span key={i} />;
+          const iso = cleJour(new Date(mois.a, mois.m, jour));
+          const fait = parJour[iso] || 0;
+          const ajd = iso === auj;
+          const futur = iso > auj;
+          return (
+            <span key={i} className="flex justify-center">
+              <span
+                className={`h-9 w-9 rounded-full flex items-center justify-center text-[13px] font-bold chiffres transi ${
+                  fait ? "bg-accent text-accent-ink" : ajd ? "contour-accent text-encre" : futur ? "text-sourd" : "text-douce"
+                }`}
+              >
+                {jour}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-xs text-brume mt-3 text-center chiffres">
+        {n ? `${n} séance${n > 1 ? "s" : ""} en ${libelleMois.split(" ")[0]}${kcal ? ` · ≈ ${formatNombre(kcal)} kcal` : ""}` : "Aucune séance ce mois-ci"}
+      </p>
+    </section>
+  );
+}
 
 function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
   const [deplie, setDeplie] = useState(null);
+  const [mois, setMois] = useState(() => {
+    const d = new Date();
+    return { a: d.getFullYear(), m: d.getMonth() };
+  });
   const groupes = useMemo(() => {
     const parSemaine = new Map();
     for (const h of historique) {
@@ -4440,121 +5028,146 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
   }, [historique]);
 
   const titreDe = (h) =>
-    h.titre || (toutesSeances.find((s) => s.id === h.s) || {}).titre || "Séance";
+    decouperTitre(h.titre || (toutesSeances.find((s) => s.id === h.s) || {}).titre || "Séance")[1];
 
-  if (!historique.length) {
-    return (
-      <div key={profil} className="vue rounded-3xl bg-carte border border-ligne p-8 text-center">
-        <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
-          <Flame size={28} className="text-accent" />
-        </span>
-        <h3 className="mt-4 font-bold text-base">Aucune séance pour l’instant</h3>
-        <p className="text-brume text-sm mt-2 leading-relaxed">
-          Chaque séance validée s’affichera ici. La première est la plus belle — elle t’attend
-          dans « Ma semaine ».
-        </p>
-      </div>
-    );
+  function changerMois(dir) {
+    setMois(({ a, m }) => {
+      const d = new Date(a, m + dir, 1);
+      return { a: d.getFullYear(), m: d.getMonth() };
+    });
   }
 
   const lundiActuel = lundiDe(cleJour());
 
   return (
-    <div key={profil} className="vue space-y-5">
-      {groupes.map(({ semaine, entrees }) => (
-        <section key={semaine}>
-          <h3 className="text-xs uppercase tracking-widest text-brume font-bold mb-2.5">
-            {semaine === lundiActuel
-              ? "Cette semaine"
-              : `Semaine du ${FORMAT_COURT.format(depuisCle(semaine))}`}
-            <span className="text-accent transi"> · {entrees.length} séance{entrees.length > 1 ? "s" : ""}</span>
-          </h3>
-          <div className="space-y-2">
-            {entrees.map((h, i) => {
-              const cle = `${semaine}-${h.s}-${h.d}-${i}`;
-              const ouvert = deplie === cle;
-              return (
-                <div key={cle} className="rounded-2xl bg-carte border border-ligne overflow-hidden">
-                  <div className="p-3 flex items-center gap-3">
-                    <button
-                      onClick={() => setDeplie(ouvert ? null : cle)}
-                      aria-expanded={ouvert}
-                      className="flex-1 min-w-0 flex items-center gap-3 text-left"
-                    >
-                      <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-                        <Check size={19} strokeWidth={3} className="text-accent transi" />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span className="font-bold text-sm truncate">{titreDe(h)}</span>
-                          {h.auto && (
-                            <span
-                              className="text-xs font-bold px-1.5 py-0.5 rounded bg-carte2 text-brume shrink-0"
-                              title="Validée automatiquement : la séance avait été commencée puis oubliée"
-                            >
-                              auto
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-brume text-xs block mt-0.5">
-                          {FORMAT_JOUR.format(depuisCle(h.d))}
-                          {h.detail ? ` · ${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : ""}
-                          {h.kcal ? ` · ≈ ${h.kcal} kcal` : ""}
-                        </span>
-                      </span>
-                      <ChevronDown
-                        size={17}
-                        className={`text-brume shrink-0 transi ${ouvert ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    <BoutonSuppression
-                      etiquette="Supprimer cette séance de l’historique"
-                      surConfirmer={() => surSupprimer(h)}
-                    />
-                  </div>
-                  {ouvert && (
-                    <div className="px-3 pb-3 vue">
-                      {h.detail && h.detail.length ? (
-                        <div className="rounded-xl bg-fond p-3 space-y-1.5">
-                          {h.detail.map((dexo, j) => {
-                            const ch = texteCharges(dexo);
-                            /* charges différentes d'une série à l'autre : sur une 2e ligne */
-                            const variees = ch.includes("/");
-                            return (
-                              <div key={j}>
-                                <div className="flex items-baseline justify-between gap-3">
-                                  <span className="text-xs font-bold text-douce truncate">{dexo.nom}</span>
-                                  <span className="text-xs text-brume chiffres shrink-0">
-                                    {dexo.minutes
-                                      ? `${dexo.minutes} min`
-                                      : `${dexo.series} × ${dexo.reps}${ch && !variees ? ` · ${ch}` : ""}`}
-                                  </span>
-                                </div>
-                                {variees && (
-                                  <p className="text-xs text-brume chiffres text-right">{ch}</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-brume text-xs leading-relaxed">
-                          Détail non enregistré — les séances validées à partir de maintenant
-                          garderont leurs exercices, séries et charges.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    <div key={profil} className="vue space-y-7">
+      <div>
+        <h1 className="titre-xl">Journal</h1>
+        <p className="text-douce text-[15px] mt-2 leading-snug">Chaque séance validée, avec ce que tu y as fait.</p>
+      </div>
+
+      <CalendrierMois historique={historique} mois={mois} surMois={changerMois} />
+
+      {!historique.length ? (
+        <section className="surface rounded-4xl p-8 text-center">
+          <span className="mx-auto h-16 w-16 rounded-full bg-accent-soft flex items-center justify-center">
+            <Flame size={28} className="text-accent transi" />
+          </span>
+          <h3 className="mt-4 font-bold text-base">Aucune séance pour l’instant</h3>
+          <p className="text-brume text-sm mt-2 leading-relaxed">
+            Chaque séance validée s’affichera ici. La première est la plus belle — elle t’attend
+            sur l’accueil.
+          </p>
         </section>
-      ))}
-      <p className="text-brume text-center text-xs leading-relaxed">
-        Une séance validée par erreur (ou validée « auto » alors que c’était un essai) ?
-        Supprime-la ici, l’assiduité se recalcule toute seule.
-      </p>
+      ) : (
+        groupes.map(({ semaine, entrees }) => (
+          <Section
+            key={semaine}
+            titre={
+              semaine === lundiActuel
+                ? `Cette semaine · ${entrees.length} séance${entrees.length > 1 ? "s" : ""}`
+                : `Semaine du ${FORMAT_COURT.format(depuisCle(semaine))} · ${entrees.length}`
+            }
+          >
+            <div className="space-y-2">
+              {entrees.map((h, i) => {
+                const cle = `${semaine}-${h.s}-${h.d}-${i}`;
+                const ouvert = deplie === cle;
+                const date = depuisCle(h.d);
+                const infos = [
+                  h.detail ? `${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : null,
+                  h.duree ? `${h.duree} min` : null,
+                  h.kcal ? `≈ ${h.kcal} kcal` : null,
+                ].filter(Boolean);
+                return (
+                  <div key={cle} className="surface rounded-3xl overflow-hidden">
+                    <div className="p-3 pl-3.5 flex items-center gap-2">
+                      <button
+                        onClick={() => setDeplie(ouvert ? null : cle)}
+                        aria-expanded={ouvert}
+                        className="flex-1 min-w-0 flex items-center gap-3.5 text-left"
+                      >
+                        <span className="w-11 shrink-0 text-center">
+                          <span className="block text-[21px] font-extrabold leading-none chiffres">{date.getDate()}</span>
+                          <span className="block text-[11px] text-brume mt-1">{FORMAT_JOUR_COURT.format(date)}</span>
+                        </span>
+                        <span className="w-px self-stretch bg-ligne" />
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-[15px] truncate">{titreDe(h)}</span>
+                            {h.records && h.records.length > 0 && (
+                              <Trophy size={14} className="text-or shrink-0" aria-label="Record battu" />
+                            )}
+                            {h.auto && (
+                              <span
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-carte2 text-brume shrink-0"
+                                title="Validée automatiquement : la séance avait été commencée puis oubliée"
+                              >
+                                auto
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-brume text-xs block mt-0.5 truncate">{infos.join(" · ")}</span>
+                        </span>
+                        <ChevronDown size={17} className={`text-sourd shrink-0 mr-1 transi ${ouvert ? "rotate-180" : ""}`} />
+                      </button>
+                    </div>
+                    {ouvert && (
+                      <div className="px-3.5 pb-3.5 deplie">
+                        {h.detail && h.detail.length ? (
+                          <div className="rounded-2xl bg-carte2 p-3 space-y-2">
+                            {h.detail.map((dexo, j) => {
+                              const ch = texteCharges(dexo);
+                              /* charges différentes d'une série à l'autre : sur une 2e ligne */
+                              const variees = ch.includes("/");
+                              const record = h.records && h.records.includes(dexo.id);
+                              return (
+                                <div key={j}>
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <span className="text-[13px] font-bold text-douce truncate flex items-center gap-1.5">
+                                      {record && <Trophy size={12} className="text-or shrink-0" />}
+                                      {dexo.nom}
+                                    </span>
+                                    <span className="text-xs text-brume chiffres shrink-0">
+                                      {dexo.minutes
+                                        ? `${dexo.minutes} min`
+                                        : `${dexo.series} × ${dexo.reps}${ch && !variees ? ` · ${ch}` : ""}`}
+                                    </span>
+                                  </div>
+                                  {variees && <p className="text-xs text-brume chiffres text-right">{ch}</p>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-brume text-xs leading-relaxed">
+                            Détail non enregistré — les séances validées à partir de maintenant
+                            garderont leurs exercices, séries et charges.
+                          </p>
+                        )}
+                        <div className="mt-3 flex items-center gap-2 pl-1">
+                          <span className="flex-1 text-xs text-sourd">Validée par erreur ?</span>
+                          <BoutonSuppression
+                            etiquette="Supprimer cette séance de l’historique"
+                            surConfirmer={() => surSupprimer(h)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        ))
+      )}
+
+      {historique.length > 0 && (
+        <p className="text-sourd text-center text-xs leading-relaxed px-4">
+          Une séance validée par erreur (ou validée « auto » alors que c’était un essai) ?
+          Supprime-la ici, l’assiduité se recalcule toute seule.
+        </p>
+      )}
     </div>
   );
 }
@@ -4600,16 +5213,16 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
     ];
     return (
       <div className="vue">
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 pt-4 mb-6">
           <button
             onClick={surFermer}
             aria-label="Annuler et revenir"
-            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+            className="h-11 w-11 rounded-full surface-2 flex items-center justify-center shrink-0 active:scale-95 transi"
           >
-            <ChevronLeft size={22} />
+            <ChevronLeft size={21} />
           </button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-extrabold tracking-tight leading-tight">Nouveau programme</h2>
+            <h2 className="titre-l">Nouveau programme</h2>
             <p className="text-brume text-xs mt-0.5">Comment veux-tu démarrer ?</p>
           </div>
         </div>
@@ -4627,7 +5240,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
                   }))
                 )
               }
-              className="w-full rounded-2xl bg-carte border border-ligne p-4 flex items-center gap-4 text-left active:scale-98 transi"
+              className="w-full rounded-3xl surface p-4 flex items-center gap-4 text-left active:scale-98 transi"
             >
               <span className="h-12 w-12 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
                 <m.icone size={21} className="text-accent transi" />
@@ -4689,16 +5302,16 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
 
   return (
     <div className="vue">
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 pt-4 mb-6">
         <button
           onClick={surFermer}
           aria-label="Annuler et revenir"
-          className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+          className="h-11 w-11 rounded-full surface-2 flex items-center justify-center shrink-0 active:scale-95 transi"
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={21} />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-extrabold tracking-tight leading-tight">
+          <h2 className="titre-l">
             {initial ? "Modifier le programme" : "Nouveau programme"}
           </h2>
           <p className="text-brume text-xs mt-0.5">Les exercices s’enchaînent dans l’ordre affiché</p>
@@ -4706,7 +5319,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
       </div>
 
       <label className="block mb-5">
-        <span className="text-xs uppercase tracking-widest text-brume font-bold block mb-2">
+        <span className="text-[13px] font-bold text-douce block mb-2 px-1">
           Nom du programme
         </span>
         <input
@@ -4714,14 +5327,14 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
           value={nom}
           onChange={(e) => setNom(e.target.value)}
           placeholder="Ex. : Spécial jambes, Semaine légère…"
-          className="w-full rounded-2xl bg-carte border border-ligne px-4 font-bold text-base outline-none placeholder-slate-600 focus:border-slate-500"
+          className="w-full rounded-2xl surface px-4 font-bold text-base outline-none placeholder-sourd focus:bg-carte2 transi"
           style={{ height: 52 }}
         />
       </label>
 
       <div className="space-y-4">
         {seances.map((s, i) => (
-          <section key={i} className="rounded-2xl bg-carte border border-ligne p-4">
+          <section key={i} className="rounded-4xl surface p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="h-9 w-9 rounded-xl bg-accent-soft text-accent flex items-center justify-center font-extrabold shrink-0 transi">
                 {i + 1}
@@ -4731,7 +5344,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
                 value={s.nom}
                 onChange={(e) => majSeance(i, { nom: e.target.value })}
                 placeholder={`Séance ${i + 1}`}
-                className="flex-1 min-w-0 rounded-xl bg-carte2 px-3 font-bold text-sm outline-none placeholder-slate-600"
+                className="flex-1 min-w-0 rounded-xl bg-carte2 px-3 font-bold text-sm outline-none placeholder-sourd"
                 style={{ height: 44 }}
                 aria-label={`Nom de la séance ${i + 1}`}
               />
@@ -4750,8 +5363,8 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
             <button
               onClick={() => majSeance(i, { tabata: s.tabata ? null : { travail: 20, repos: 10 } })}
               aria-pressed={!!s.tabata}
-              className={`w-full rounded-xl border p-3 mb-3 flex items-center gap-3 text-left transi ${
-                s.tabata ? "bordure-accent-douce bg-carte2" : "border-ligne bg-carte2"
+              className={`w-full rounded-2xl p-3 mb-3 flex items-center gap-3 text-left transi ${
+                s.tabata ? "bg-accent-soft contour-accent" : "bg-carte2"
               }`}
             >
               <span
@@ -4794,7 +5407,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
                   const exo = dico[exoId];
                   if (!exo) return null;
                   return (
-                    <li key={exoId} className="rounded-xl bg-carte2 p-2 pl-3 flex items-center gap-2">
+                    <li key={exoId} className="rounded-2xl bg-carte2 p-2 pl-3 flex items-center gap-2">
                       <span className="text-brume text-xs chiffres shrink-0 w-4">{idx + 1}</span>
                       <span className="flex-1 min-w-0">
                         <span className="font-bold text-sm block truncate">{exo.nom}</span>
@@ -4846,7 +5459,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
 
             <button
               onClick={() => setSelecteur(i)}
-              className="mt-2 w-full h-12 rounded-xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+              className="mt-2 w-full h-12 rounded-xl border border-dashed border-carte3 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
             >
               <Plus size={17} className="text-accent transi" /> Ajouter un exercice
             </button>
@@ -4860,7 +5473,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
       {seances.length < 5 && (
         <button
           onClick={() => setSeances((prev) => [...prev, { nom: `Séance ${prev.length + 1}`, exoIds: [], tabata: null, rounds: {} }])}
-          className="mt-3 w-full h-12 rounded-2xl border border-dashed border-slate-600 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+          className="mt-3 w-full h-12 rounded-2xl border border-dashed border-carte3 text-brume text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
         >
           <Plus size={17} /> Ajouter une séance
         </button>
@@ -4924,7 +5537,7 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
       <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col px-4">
         <div className="flex items-center gap-3 pt-5 pb-3">
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-extrabold tracking-tight leading-tight">Ajouter des exercices</h2>
+            <h2 className="titre-l">Ajouter des exercices</h2>
             <p className="text-brume text-xs mt-0.5 truncate chiffres">
               {nomSeance} · {exoIds.length} exercice{exoIds.length > 1 ? "s" : ""} choisi{exoIds.length > 1 ? "s" : ""}
             </p>
@@ -4937,14 +5550,14 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
           </button>
         </div>
 
-        <label className="flex items-center gap-2.5 rounded-2xl bg-carte border border-ligne px-4 shrink-0" style={{ height: 48 }}>
+        <label className="flex items-center gap-2.5 rounded-2xl surface px-4 shrink-0" style={{ height: 50 }}>
           <Search size={18} className="text-brume shrink-0" />
           <input
             type="text"
             value={recherche}
             onChange={(e) => setRecherche(e.target.value)}
             placeholder="Rechercher un exercice…"
-            className="w-full min-w-0 bg-transparent text-sm font-bold outline-none placeholder-slate-600"
+            className="w-full min-w-0 bg-transparent text-sm font-bold outline-none placeholder-sourd"
             aria-label="Rechercher un exercice"
           />
           {recherche && (
@@ -4960,7 +5573,7 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
               key={z || "toutes"}
               onClick={() => setZone(z)}
               className={`px-3 rounded-xl text-xs font-bold transi ${
-                zone === z ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                zone === z ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
               }`}
               style={{ height: 38 }}
             >
@@ -4972,7 +5585,7 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
         <div className="flex-1 overflow-y-auto pb-8 space-y-4 defile">
           <button
             onClick={() => setForm(null)}
-            className="w-full h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+            className="w-full h-12 rounded-2xl border border-dashed border-carte3 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
           >
             <Plus size={17} className="text-accent transi" /> Créer mon exercice
           </button>
@@ -4983,7 +5596,7 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
           )}
           {sections.map((sec) => (
             <div key={sec.zone}>
-              <p className="text-xs uppercase tracking-widest text-brume font-bold mb-2">{sec.zone}</p>
+              <p className="text-[13px] font-bold text-douce mb-2 px-1">{sec.zone}</p>
               <div className="space-y-2">
                 {sec.exos.map((exo) => {
                   const choisi = exoIds.includes(exo.id);
@@ -4992,8 +5605,8 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
                   return (
                     <div
                       key={exo.id}
-                      className={`rounded-2xl border flex items-stretch transi ${
-                        choisi ? "bg-carte bordure-accent-douce" : "bg-carte border-ligne"
+                      className={`rounded-3xl flex items-stretch transi ${
+                        choisi ? "surface contour-accent" : "surface"
                       } ${pris ? "opacity-50" : ""}`}
                     >
                       <button
@@ -5141,7 +5754,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
     });
   }
 
-  const etiquette = "text-xs uppercase tracking-widest text-brume font-bold block mb-2";
+  const etiquette = "text-[13px] font-bold text-douce block mb-2 px-1";
 
   return (
     <div className="fixed inset-0 z-50 bg-fond overflow-y-auto defile coussin-haut">
@@ -5150,15 +5763,15 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
           <button
             onClick={surFermer}
             aria-label="Annuler"
-            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+            className="h-11 w-11 rounded-full surface-2 flex items-center justify-center shrink-0 active:scale-95 transi"
           >
-            <ChevronLeft size={22} />
+            <ChevronLeft size={21} />
           </button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-extrabold tracking-tight leading-tight">
+            <h2 className="titre-l">
               {initial ? "Modifier l’exercice" : "Mon exercice"}
             </h2>
-            <p className="text-brume text-xs mt-0.5">Il apparaîtra dans le catalogue, pour vous deux</p>
+            <p className="text-brume text-xs mt-0.5">Il rejoindra le catalogue de l’espace</p>
           </div>
         </div>
 
@@ -5170,7 +5783,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
               value={nom}
               onChange={(e) => setNom(e.target.value)}
               placeholder="Ex. : Presse à mollets assis"
-              className="w-full rounded-2xl bg-carte border border-ligne px-4 font-bold text-base outline-none placeholder-slate-600 focus:border-slate-500"
+              className="w-full rounded-2xl surface px-4 font-bold text-base outline-none placeholder-sourd focus:bg-carte2 transi"
               style={{ height: 52 }}
             />
           </label>
@@ -5183,7 +5796,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                   key={z}
                   onClick={() => choisirZone(z)}
                   className={`px-3 rounded-xl text-xs font-bold transi ${
-                    zone === z ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                    zone === z ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
                   }`}
                   style={{ height: 40 }}
                 >
@@ -5255,7 +5868,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                     onClick={() => setEnDuree(v)}
                     aria-pressed={enDuree === v}
                     className={`rounded-xl px-3 py-2 text-left transi ${
-                      enDuree === v ? "bg-accent text-accent-ink" : "bg-carte text-douce border border-ligne"
+                      enDuree === v ? "bg-accent text-accent-ink" : "bg-carte2 text-douce"
                     }`}
                   >
                     <span className="block text-sm font-bold">{titre}</span>
@@ -5270,7 +5883,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                       key={d}
                       onClick={() => setDuree(d)}
                       className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
-                        duree === d ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                        duree === d ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
                       }`}
                       style={{ height: 44 }}
                     >
@@ -5286,7 +5899,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                     key={i.id}
                     onClick={() => setIntensite(i.id)}
                     className={`flex-1 rounded-xl text-sm font-bold transi ${
-                      intensite === i.id ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                      intensite === i.id ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
                     }`}
                     style={{ height: 44 }}
                   >
@@ -5312,7 +5925,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                     key={s}
                     onClick={() => setSeries(s)}
                     className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
-                      series === s ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                      series === s ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
                     }`}
                     style={{ height: 44 }}
                   >
@@ -5328,7 +5941,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
                 placeholder="12, 10 / côté, 30 s…"
-                className="w-full rounded-xl bg-carte border border-ligne px-3 text-center font-bold text-sm outline-none placeholder-slate-600 chiffres"
+                className="w-full rounded-2xl surface px-3 text-center font-bold text-sm outline-none placeholder-sourd chiffres"
                 style={{ height: 44 }}
               />
             </label>
@@ -5342,7 +5955,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
                   key={r}
                   onClick={() => setRepos(r)}
                   className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
-                    repos === r ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                    repos === r ? "bg-accent text-accent-ink" : "bg-carte2 text-brume"
                   }`}
                   style={{ height: 44 }}
                 >
@@ -5355,8 +5968,8 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
           <button
             onClick={() => setSansCharge(!sansCharge)}
             aria-pressed={sansCharge}
-            className={`w-full rounded-2xl border p-3.5 flex items-center gap-3 text-left transi ${
-              sansCharge ? "bordure-accent-douce bg-carte" : "border-ligne bg-carte"
+            className={`w-full rounded-2xl p-3.5 flex items-center gap-3 text-left transi ${
+              sansCharge ? "surface contour-accent" : "surface"
             }`}
           >
             <span
@@ -5378,7 +5991,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
               value={consigne}
               onChange={(e) => setConsigne(e.target.value)}
               placeholder="Ex. : Départ conseillé : 20–30 kg"
-              className="w-full rounded-2xl bg-carte border border-ligne px-4 text-sm font-bold outline-none placeholder-slate-600"
+              className="w-full rounded-2xl surface px-4 text-sm font-bold outline-none placeholder-sourd"
               style={{ height: 48 }}
             />
           </label>
@@ -5390,7 +6003,7 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
               onChange={(e) => setConseil(e.target.value)}
               placeholder="Ex. : Dos plat, mouvement lent et contrôlé…"
               rows={2}
-              className="w-full rounded-2xl bg-carte border border-ligne px-4 py-3 text-sm outline-none placeholder-slate-600 resize-none leading-relaxed"
+              className="w-full rounded-2xl surface px-4 py-3 text-sm outline-none placeholder-sourd resize-none leading-relaxed"
             />
           </label>
 
@@ -5421,6 +6034,27 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* Vue séance détaillée                                                */
 /* ------------------------------------------------------------------ */
 
+/* Chrono de la séance en cours (depuis la première action) */
+function Chrono({ depuis }) {
+  const [, setT] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setT((x) => x + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
+  const s = Math.max(0, Math.floor((Date.now() - depuis) / 1000));
+  /* au-delà de 4 h, c'est une séance oubliée : pas de chrono absurde */
+  if (s > 4 * 3600) return null;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return (
+    <span className="h-9 px-3 rounded-full surface-2 flex items-center gap-1.5 text-[13px] font-bold chiffres shrink-0" aria-label="Durée de la séance">
+      <Clock size={13} className="text-accent transi" />
+      {h ? `${h}:${String(m).padStart(2, "0")}` : m}:{sec}
+    </span>
+  );
+}
+
 function VueSeance({
   seance, profil, niveau, etat, charges, dico, tousExos, faiteCetteSemaine, historique, idsProgramme,
   exosPerso, surSauverExo, surSupprimerExo,
@@ -5436,6 +6070,12 @@ function VueSeance({
   const [roue, setRoue] = useState(null);
   const [roueDuree, setRoueDuree] = useState(null); // {exo, slotId, minutes}
   const [confirmation, setConfirmation] = useState(false); // séance écourtée
+  const [modeOrdre, setModeOrdre] = useState(false);
+  /* exercice déplié : celui choisi à la main, sinon le premier pas encore fait */
+  const [ouvertManuel, setOuvertManuel] = useState(null); // slotId | "aucun" | null
+  const [etapeOuverte, setEtapeOuverte] = useState(() =>
+    !etat.coches.echauffement && !seanceDemarree(etat) ? "echauffement" : null
+  );
 
   /* emplacements = exercices du programme + ajouts propres à cette séance,
      dans l'ordre choisi pour la séance du jour */
@@ -5451,75 +6091,138 @@ function VueSeance({
   ];
   const nFait = etapes.filter((e) => checks[e.id]).length;
   const tout = nFait === etapes.length;
+  const peutValider = nFait > 0 || seanceDemarree(etat);
+  const avancement =
+    (nFait +
+      slots.reduce((tot, s) => {
+        if (checks[s.slotId]) return tot;
+        const exo = exoDuSlot(s, etat, dico);
+        const n = etat.series[s.slotId] || 0;
+        return tot + (exo && exo.series ? Math.min(0.9, n / exo.series) : 0);
+      }, 0)) /
+    etapes.length;
   /* exercices réellement faits (variante affichée, pas l'emplacement) */
   const exosFaits = slots
-    .filter((s) => checks[s.slotId])
+    .filter((s) => checks[s.slotId] || etat.series[s.slotId] > 0)
     .map((s) => etat.remplacements[s.slotId] || s.base.id);
   const affiches = slots.map((s) => exoDuSlot(s, etat, dico).id);
 
+  const premierNonFait = slots.find((s) => !checks[s.slotId]);
+  const ouvert = modeOrdre
+    ? null
+    : ouvertManuel === "aucun"
+    ? null
+    : ouvertManuel && slotIds.includes(ouvertManuel)
+    ? ouvertManuel
+    : premierNonFait
+    ? premierNonFait.slotId
+    : null;
+
+  /* l'exercice ouvert vient d'être terminé : on passe au suivant */
+  const cochesAvant = useRef(checks);
+  useEffect(() => {
+    if (ouvertManuel && ouvertManuel !== "aucun" && checks[ouvertManuel] && !cochesAvant.current[ouvertManuel]) {
+      setOuvertManuel(null);
+    }
+    cochesAvant.current = checks;
+  });
+
+  const [etiquette, titre] = decouperTitre(seance.titre);
+
+  /* cocher une étape ouverte la replie : on passe à la suite */
+  function cocherEtape(id) {
+    if (!checks[id] && etapeOuverte === id) setEtapeOuverte(null);
+    surCoche(id);
+  }
+
   return (
     <div key={`${profil}-${seance.id}`} className="vue">
-      {/* en-tête de séance */}
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={surRetour}
-          aria-label="Retour à ma semaine"
-          className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
-        >
-          <ChevronLeft size={22} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-extrabold tracking-tight leading-tight">{seance.titre}</h2>
-          <p className="text-brume text-xs mt-0.5">45–60 min · {seance.sousTitre}</p>
+      {/* en-tête collant : retour, titre, chrono, réorganiser, progression */}
+      <div className="entete-collante -mx-5 px-5 pb-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={surRetour}
+            aria-label="Retour à ma semaine"
+            className="h-11 w-11 rounded-full surface-2 flex items-center justify-center shrink-0 active:scale-95 transi"
+          >
+            <ChevronLeft size={21} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-brume truncate first-letter:uppercase">{etiquette || seance.sousTitre}</p>
+            <h1 className="text-[19px] font-extrabold tracking-tight leading-tight truncate">{titre}</h1>
+          </div>
+          {etat.t0 && seanceDemarree(etat) ? <Chrono depuis={etat.t0} /> : null}
+          <button
+            onClick={() => setModeOrdre(!modeOrdre)}
+            aria-label="Réorganiser les exercices"
+            aria-pressed={modeOrdre}
+            className={`h-11 w-11 rounded-full flex items-center justify-center shrink-0 active:scale-95 transi ${
+              modeOrdre ? "bg-accent text-accent-ink" : "surface-2 text-douce"
+            }`}
+          >
+            <ArrowUpDown size={17} />
+          </button>
+        </div>
+        <div className="mt-3 flex items-center gap-2.5">
+          <div className="flex-1 h-1.5 rounded-full bg-carte2 overflow-hidden">
+            <div className="h-full rounded-full bg-accent barre" style={{ width: `${avancement * 100}%` }} />
+          </div>
+          <span className="text-[11px] font-bold text-brume chiffres">{nFait}/{etapes.length}</span>
         </div>
       </div>
 
       {/* séance déjà validée cette semaine */}
       {faiteCetteSemaine && (
-        <div className="rounded-2xl bg-carte border bordure-accent-douce p-4 mb-4 flex items-center gap-3">
-          <span className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center shrink-0 transi">
-            <Check size={20} strokeWidth={3} className="text-accent-ink" />
+        <div className="rounded-3xl degrade-heros p-3 pl-4 mb-3 flex items-center gap-3">
+          <span className="h-9 w-9 rounded-full bg-accent flex items-center justify-center shrink-0 transi">
+            <Check size={18} strokeWidth={3} className="text-accent-ink" />
           </span>
           <p className="flex-1 text-sm font-bold">Validée cette semaine</p>
           <button
             onClick={surAnnuler}
-            className="h-11 px-3 rounded-xl bg-carte2 text-xs font-bold text-douce active:scale-95 transi"
+            className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold text-douce active:scale-95 transi"
           >
             Annuler la validation
           </button>
         </div>
       )}
 
-      {/* progression */}
-      <div className="mb-5">
-        <div className="h-2 rounded-full bg-carte overflow-hidden">
-          <div
-            className="h-full rounded-full bg-accent barre"
-            style={{ width: `${(nFait / etapes.length) * 100}%` }}
-          />
-        </div>
-        <p className="text-brume text-xs mt-2 chiffres">{nFait}/{etapes.length} étapes</p>
-      </div>
-
-      <div className="space-y-3">
-        {/* échauffement */}
-        <EtapeSimple
-          icone={Wind}
-          etiquette="Échauffement — non négociable"
-          coche={!!checks["echauffement"]}
-          surCoche={() => surCoche("echauffement")}
-        >
-          <p className="text-sm text-douce leading-relaxed">
-            {ECHAUFFEMENT.duree[niveau]} de cardio très doux (vélo ou elliptique), puis :
+      {modeOrdre && (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 mb-3 flex items-center gap-3 deplie">
+          <ArrowUpDown size={16} className="text-accent shrink-0 transi" />
+          <p className="flex-1 text-xs text-douce leading-snug">
+            Change l’ordre pour aujourd’hui seulement — le programme ne bouge pas.
           </p>
-          <ul className="mt-2 space-y-1">
-            {ECHAUFFEMENT.mobilite.map((m, i) => (
-              <li key={i} className="text-xs text-brume leading-relaxed flex gap-2">
-                <span className="text-accent shrink-0">•</span>{m}
-              </li>
-            ))}
-          </ul>
-        </EtapeSimple>
+          <button onClick={() => setModeOrdre(false)} className="text-sm font-extrabold text-accent transi">
+            OK
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        {/* échauffement */}
+        {!modeOrdre && (
+          <EtapeSimple
+            icone={Wind}
+            etiquette="Échauffement"
+            detail={`${ECHAUFFEMENT.duree[niveau]} · non négociable`}
+            coche={!!checks["echauffement"]}
+            surCoche={() => cocherEtape("echauffement")}
+            ouvert={etapeOuverte === "echauffement"}
+            surOuvrir={() => setEtapeOuverte(etapeOuverte === "echauffement" ? null : "echauffement")}
+          >
+            <p className="text-sm text-douce leading-relaxed">
+              {ECHAUFFEMENT.duree[niveau]} de cardio très doux (vélo ou elliptique), puis :
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {ECHAUFFEMENT.mobilite.map((m, i) => (
+                <li key={i} className="text-[13px] text-brume leading-relaxed flex gap-2.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0 mt-2" />{m}
+                </li>
+              ))}
+            </ul>
+          </EtapeSimple>
+        )}
 
         {/* exercices (programme + ajouts) */}
         {slots.map((s, i) => {
@@ -5575,6 +6278,9 @@ function VueSeance({
               dernierePerf={dernieresPerfs[exoAffiche.id]}
               tabata={seance.tabata || null}
               rounds={s.rounds}
+              ouvert={ouvert === s.slotId}
+              modeOrdre={modeOrdre}
+              surOuvrir={() => setOuvertManuel(ouvert === s.slotId ? "aucun" : s.slotId)}
               surCoche={() => surCoche(s.slotId)}
               surSeries={(n) =>
                 surSeries(
@@ -5613,66 +6319,87 @@ function VueSeance({
 
         {/* ajouter un exercice à la volée / remettre l'ordre du programme
             (ni l'un ni l'autre ne modifie le programme) */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setAjoutOuvert(true)}
-            className="flex-1 h-12 rounded-2xl border border-dashed border-slate-600 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
-          >
-            <Plus size={17} className="text-accent transi" /> Ajouter un exercice
-          </button>
-          {ordreModifie && (
+        {modeOrdre ? (
+          ordreModifie && (
             <button
               onClick={surReinitOrdre}
               aria-label="Remettre l’ordre du programme"
-              className="h-12 px-4 rounded-2xl bg-carte border border-ligne text-brume text-xs font-bold shrink-0 active:scale-95 transi"
+              className="w-full h-12 rounded-2xl surface text-brume text-sm font-bold active:scale-98 transi"
             >
-              Ordre d’origine
+              Revenir à l’ordre d’origine
             </button>
-          )}
-        </div>
+          )
+        ) : (
+          <button
+            onClick={() => setAjoutOuvert(true)}
+            className="w-full h-[52px] rounded-3xl border border-dashed border-carte3 text-douce text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+          >
+            <Plus size={17} className="text-accent transi" /> Ajouter un exercice
+          </button>
+        )}
 
         {/* cardio (pas en tabata : le tabata EST le cardio) */}
-        {seance.cardio && (
+        {!modeOrdre && seance.cardio && (
           <EtapeSimple
             icone={HeartPulse}
-            etiquette="Cardio — 15 à 20 min"
+            etiquette="Cardio"
+            detail="15 à 20 min"
             coche={!!checks["cardio"]}
-            surCoche={() => surCoche("cardio")}
+            surCoche={() => cocherEtape("cardio")}
+            ouvert={etapeOuverte === "cardio"}
+            surOuvrir={() => setEtapeOuverte(etapeOuverte === "cardio" ? null : "cardio")}
           >
             <p className="text-sm text-douce leading-relaxed">{seance.cardio[niveau]}</p>
           </EtapeSimple>
         )}
 
         {/* retour au calme */}
-        <EtapeSimple
-          icone={Leaf}
-          etiquette="Retour au calme — 5 min"
-          coche={!!checks["retour"]}
-          surCoche={() => surCoche("retour")}
-        >
-          <p className="text-sm text-douce leading-relaxed">{RETOUR_AU_CALME}</p>
-        </EtapeSimple>
+        {!modeOrdre && (
+          <EtapeSimple
+            icone={Leaf}
+            etiquette="Retour au calme"
+            detail="5 min · étirements doux"
+            coche={!!checks["retour"]}
+            surCoche={() => cocherEtape("retour")}
+            ouvert={etapeOuverte === "retour"}
+            surOuvrir={() => setEtapeOuverte(etapeOuverte === "retour" ? null : "retour")}
+          >
+            <p className="text-sm text-douce leading-relaxed">{RETOUR_AU_CALME}</p>
+          </EtapeSimple>
+        )}
       </div>
 
-      {/* valider (une séance écourtée se valide aussi) */}
-      <button
-        onClick={() => (tout ? surFin() : setConfirmation(true))}
-        disabled={nFait === 0}
-        className={`mt-6 w-full rounded-2xl font-extrabold text-base transi ${
-          nFait > 0 ? "bg-accent text-accent-ink active:scale-98" : "bg-carte text-brume"
-        }`}
-        style={{ height: 56 }}
-      >
-        {nFait === 0
-          ? "Coche au moins une étape"
-          : tout
-          ? "Valider la séance"
-          : `Valider la séance (${nFait}/${etapes.length})`}
-      </button>
-      <p className="text-brume text-center text-xs mt-3 leading-relaxed">
-        Douleur articulaire vive ? On passe l’exercice, sans culpabiliser — voir Conseils.
-        Oublié de valider ? Elle se validera toute seule demain, à la date d’aujourd’hui.
+      <p className="text-sourd text-center text-xs mt-5 leading-relaxed px-2">
+        Douleur articulaire vive ? On passe l’exercice, sans culpabiliser. Oublié de valider ? Elle
+        se validera toute seule demain, à la date d’aujourd’hui.
       </p>
+
+      {/* valider (une séance écourtée se valide aussi) — barre fixée en bas */}
+      {createPortal(
+        <div className="fixed inset-x-0 bottom-0 z-30 font-jakarta text-encre pointer-events-none">
+          <div
+            className="mx-auto max-w-md px-4 pt-6 barre-action pointer-events-auto"
+            style={{ background: "linear-gradient(to top, rgba(8,9,12,0.98) 55%, rgba(8,9,12,0))" }}
+          >
+            <button
+              onClick={() => (tout ? surFin() : setConfirmation(true))}
+              disabled={!peutValider}
+              className={`w-full rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 transi ${
+                peutValider ? "bg-accent text-accent-ink active:scale-98 lueur-accent" : "bg-carte2 text-sourd"
+              }`}
+              style={{ height: 56 }}
+            >
+              {peutValider && <Check size={19} strokeWidth={3} />}
+              {!peutValider
+                ? "Coche au moins une étape"
+                : tout
+                ? "Valider la séance"
+                : `Valider la séance (${nFait}/${etapes.length})`}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {confirmation && (
         <ConfirmationEcourtee
@@ -5748,46 +6475,40 @@ function VueSeance({
 
 /* Feuille de confirmation : séance écourtée */
 function ConfirmationEcourtee({ nFait, total, nbExosFaits, surValider, surValiderEtGarder, surFermer }) {
-  useVerrouScroll();
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
-      <div
-        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-6 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-xl font-extrabold tracking-tight">Séance écourtée</h3>
-        <p className="text-douce text-sm mt-2 leading-relaxed">
-          {nFait} étape{nFait > 1 ? "s" : ""} sur {total} — c’est déjà ça de pris, et ça compte
-          pareil pour ton assiduité.
-        </p>
-        <div className="mt-5 space-y-2">
+  return (
+    <Feuille titre="Séance écourtée" surFermer={surFermer} sansEntete>
+      <h3 className="titre-l">Séance écourtée</h3>
+      <p className="text-douce text-[15px] mt-2 leading-relaxed">
+        {nFait > 0
+          ? `${nFait} étape${nFait > 1 ? "s" : ""} sur ${total} — c’est déjà ça de pris, et ça compte pareil pour ton assiduité.`
+          : "Quelques séries seulement — c’est déjà ça de pris : la séance est enregistrée avec ce que tu as fait, et elle compte pour ton assiduité."}
+      </p>
+      <div className="mt-5 space-y-2">
+        <button
+          onClick={surValider}
+          className="w-full rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
+          style={{ height: 56 }}
+        >
+          Valider la séance
+        </button>
+        {nbExosFaits > 0 && (
           <button
-            onClick={surValider}
-            className="w-full rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi"
-            style={{ height: 54 }}
+            onClick={surValiderEtGarder}
+            className="w-full rounded-2xl bg-carte2 font-bold text-sm text-douce active:scale-98 transi px-4"
+            style={{ height: 56 }}
           >
-            Valider la séance
+            Valider + garder cette version en programme « express »
           </button>
-          {nbExosFaits > 0 && (
-            <button
-              onClick={surValiderEtGarder}
-              className="w-full rounded-2xl bg-carte2 font-bold text-sm text-douce active:scale-98 transi px-4"
-              style={{ height: 54 }}
-            >
-              Valider + garder cette version en programme « express »
-            </button>
-          )}
-          <button
-            onClick={surFermer}
-            className="w-full rounded-2xl border border-ligne text-brume font-bold text-sm active:scale-98 transi"
-            style={{ height: 48 }}
-          >
-            Continuer la séance
-          </button>
-        </div>
+        )}
+        <button
+          onClick={surFermer}
+          className="w-full rounded-2xl text-brume font-bold text-sm active:scale-98 transi"
+          style={{ height: 48 }}
+        >
+          Continuer la séance
+        </button>
       </div>
-    </div>,
-    document.body
+    </Feuille>
   );
 }
 
@@ -5941,28 +6662,44 @@ function MinuteurTabata({ exo, rounds, travail, repos, surTerminer, surFermer })
           <button
             onClick={surFermer}
             aria-label="Arrêter le tabata"
-            className="h-12 w-12 rounded-2xl bg-carte border border-ligne flex items-center justify-center shrink-0 active:scale-95 transi"
+            className="h-11 w-11 rounded-full surface-2 flex items-center justify-center shrink-0 active:scale-95 transi"
           >
             <X size={20} className="text-brume" />
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <p className={`uppercase tracking-widest font-extrabold text-lg transi ${couleur}`}>{libelle}</p>
-          <p
-            className={`chiffres font-extrabold leading-none transi ${finie || phase.type === "travail" ? "text-accent" : ""}`}
-            style={{ fontSize: 120 }}
-          >
-            {finie ? "💪" : reste}
-          </p>
-          <p className="text-brume text-sm chiffres">
-            {phase.type === "prep" || finie ? `${rounds} rounds au programme` : `Round ${phase.round}/${rounds}`}
-          </p>
-          <div className="w-full h-2 rounded-full bg-carte overflow-hidden mt-2">
-            <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${fraction * 100}%`, transition: "width 0.2s linear" }}
-            />
+        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <p className={`uppercase tracking-[0.22em] font-extrabold text-[15px] transi ${couleur}`}>{libelle}</p>
+          <Anneau fait={finie ? 1 : fraction} total={1} taille={268} epaisseur={14}>
+            <span
+              className={`chiffres font-extrabold leading-none transi ${finie || phase.type === "travail" ? "text-accent" : ""}`}
+              style={{ fontSize: 108, letterSpacing: "-0.04em" }}
+            >
+              {finie ? "💪" : reste}
+            </span>
+            <span className="text-brume text-sm font-semibold chiffres mt-3">
+              {phase.type === "prep" || finie ? `${rounds} rounds` : `Round ${phase.round}/${rounds}`}
+            </span>
+          </Anneau>
+          {/* un trait par round : ceux qui sont faits s'allument */}
+          <div className="flex flex-wrap justify-center gap-1.5 max-w-[260px]">
+            {Array.from({ length: rounds }).map((_, i) => {
+              const faits = finie
+                ? rounds
+                : phase.type === "travail"
+                ? phase.round - 1
+                : phase.type === "repos"
+                ? phase.round
+                : 0;
+              return (
+                <span
+                  key={i}
+                  className={`h-1.5 w-6 rounded-full transi ${
+                    i < faits ? "bg-accent" : i === faits && phase.type === "travail" ? "bg-accent pulsation" : "bg-carte3"
+                  }`}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -5970,7 +6707,7 @@ function MinuteurTabata({ exo, rounds, travail, repos, surTerminer, surFermer })
           onClick={basculerPause}
           disabled={finie}
           className={`w-full rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 transi ${
-            pause ? "bg-accent text-accent-ink" : "bg-carte border border-ligne text-douce"
+            pause ? "bg-accent text-accent-ink" : "surface-2 text-douce"
           } active:scale-98`}
           style={{ height: 60 }}
         >
@@ -6059,10 +6796,10 @@ function RoueExercices({ categories, choisi, surChoisir }) {
     }
   }, [catIdx, exoClamp, categories, surChoisir]);
 
-  const H = 176;
+  const H = 152;
   const LH = 40;
   return (
-    <div className="rounded-3xl bg-carte border border-ligne p-3">
+    <div className="rounded-3xl surface p-3">
       <div className="relative flex items-stretch justify-center gap-1">
         <div
           className="absolute pointer-events-none rounded-xl bg-carte2"
@@ -6094,66 +6831,66 @@ function RoueExercices({ categories, choisi, surChoisir }) {
 }
 
 function FeuilleCharge({ exo, sousTitre = "Charge utilisée", valeurInitiale, sansEffacer = false, surValider, surFermer }) {
-  useVerrouScroll();
   const nombre = parseFloat(String(valeurInitiale).replace(",", "."));
   const initEntier = Number.isFinite(nombre) ? Math.max(0, Math.min(300, Math.floor(nombre))) : 20;
   const initDec = Number.isFinite(nombre) && Math.round((nombre % 1) * 10) >= 3 ? 1 : 0;
   const [entier, setEntier] = useState(initEntier);
   const [dec, setDec] = useState(initDec);
+  const [cle, setCle] = useState(0); // remonte les roues après un ajustement rapide
 
   const valeur = dec === 1 ? `${entier},5` : String(entier);
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre" onClick={surFermer}>
-      <div
-        className="absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h3>
-            <p className="text-brume text-xs mt-0.5">{sousTitre}</p>
-          </div>
-          <button
-            onClick={surFermer}
-            aria-label="Fermer"
-            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-          >
-            <X size={18} className="text-brume" />
-          </button>
-        </div>
+  /* raccourcis : ±2,5 kg, +5 kg sans faire tourner la roue */
+  function ajuster(delta) {
+    const n = Math.max(0, Math.min(300.5, entier + dec * 0.5 + delta));
+    setEntier(Math.floor(n));
+    setDec(n % 1 ? 1 : 0);
+    setCle((k) => k + 1);
+  }
 
-        <div className="relative flex items-center justify-center gap-1">
-          <div
-            className="absolute pointer-events-none rounded-xl bg-carte2"
-            style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 24, right: 24, opacity: 0.45 }}
-          />
-          <Roue valeurs={ROUE_ENTIERS} index={entier} surIndex={setEntier} largeur={96} />
-          <Roue valeurs={ROUE_DECIMALES} index={dec} surIndex={setDec} largeur={64} />
-          <div style={{ height: 200 }} className="flex items-center">
-            <span className="font-bold text-brume text-sm pl-1">kg</span>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          {!sansEffacer && (
-            <button
-              onClick={() => surValider("")}
-              className="h-14 px-4 rounded-2xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
-            >
-              Effacer
-            </button>
-          )}
-          <button
-            onClick={() => surValider(valeur)}
-            className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
-          >
-            Valider {valeur} kg
-          </button>
+  return (
+    <Feuille titre={exo.nom} sousTitre={sousTitre} surFermer={surFermer}>
+      <div className="relative flex items-center justify-center gap-1">
+        <div
+          className="absolute pointer-events-none rounded-2xl bg-carte2"
+          style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 16, right: 16 }}
+        />
+        <Roue key={`e${cle}`} valeurs={ROUE_ENTIERS} index={entier} surIndex={setEntier} largeur={96} />
+        <Roue key={`d${cle}`} valeurs={ROUE_DECIMALES} index={dec} surIndex={setDec} largeur={64} />
+        <div style={{ height: 200 }} className="relative flex items-center">
+          <span className="font-bold text-brume text-sm pl-1">kg</span>
         </div>
       </div>
-    </div>,
-    document.body
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {[[-2.5, "−2,5"], [2.5, "+2,5"], [5, "+5"]].map(([d, libelle]) => (
+          <button
+            key={libelle}
+            onClick={() => ajuster(d)}
+            className="h-11 rounded-full bg-carte2 text-sm font-bold chiffres active:scale-95 transi"
+          >
+            {libelle} kg
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        {!sansEffacer && (
+          <button
+            onClick={() => surValider("")}
+            className="h-14 px-5 rounded-2xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
+          >
+            Effacer
+          </button>
+        )}
+        <button
+          onClick={() => surValider(valeur)}
+          className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
+        >
+          Valider {valeur} kg
+        </button>
+      </div>
+    </Feuille>
   );
 }
 
@@ -6161,73 +6898,95 @@ function FeuilleCharge({ exo, sousTitre = "Charge utilisée", valeurInitiale, sa
 const ROUE_MINUTES = Array.from({ length: 120 }, (_, i) => String(i + 1));
 
 function FeuilleDuree({ exo, valeurInitiale, surValider, surFermer }) {
-  useVerrouScroll();
   const init = Math.max(1, Math.min(120, parseInt(valeurInitiale, 10) || exo.duree || 20));
   const [idx, setIdx] = useState(init - 1);
+  const [cle, setCle] = useState(0);
   const minutes = idx + 1;
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 voile font-jakarta text-encre" onClick={surFermer}>
-      <div
-        className="absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h3>
-            <p className="text-brume text-xs mt-0.5">Durée faite</p>
-          </div>
-          <button
-            onClick={surFermer}
-            aria-label="Fermer"
-            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
-          >
-            <X size={18} className="text-brume" />
-          </button>
+  return (
+    <Feuille titre={exo.nom} sousTitre="Durée faite" surFermer={surFermer}>
+      <div className="relative flex items-center justify-center gap-1">
+        <div
+          className="absolute pointer-events-none rounded-2xl bg-carte2"
+          style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 16, right: 16 }}
+        />
+        <Roue key={cle} valeurs={ROUE_MINUTES} index={idx} surIndex={setIdx} largeur={96} />
+        <div style={{ height: 200 }} className="relative flex items-center">
+          <span className="font-bold text-brume text-sm pl-1">min</span>
         </div>
-
-        <div className="relative flex items-center justify-center gap-1">
-          <div
-            className="absolute pointer-events-none rounded-xl bg-carte2"
-            style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 24, right: 24, opacity: 0.45 }}
-          />
-          <Roue valeurs={ROUE_MINUTES} index={idx} surIndex={setIdx} largeur={96} />
-          <div style={{ height: 200 }} className="flex items-center">
-            <span className="font-bold text-brume text-sm pl-1">min</span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => surValider(minutes)}
-          className="mt-4 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
-        >
-          Valider {minutes} min
-        </button>
       </div>
-    </div>,
-    document.body
+      <div className="mt-3 grid grid-cols-5 gap-1.5">
+        {[10, 15, 20, 30, 45].map((m) => (
+          <button
+            key={m}
+            onClick={() => { setIdx(m - 1); setCle((k) => k + 1); }}
+            className={`h-11 rounded-full text-sm font-bold chiffres active:scale-95 transi ${
+              minutes === m ? "bg-accent-soft text-accent" : "bg-carte2"
+            }`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => surValider(minutes)}
+        className="mt-4 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
+      >
+        Valider {minutes} min
+      </button>
+    </Feuille>
   );
 }
 
-function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
+/* Étape simple (échauffement, cardio, retour au calme) : repliable */
+function EtapeSimple({ icone: Icone, etiquette, detail, coche, surCoche, ouvert, surOuvrir, children }) {
   return (
-    <div className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}>
-      <div className="flex items-center gap-3">
-        <span className="h-10 w-10 rounded-xl bg-accent-soft flex items-center justify-center shrink-0 transi">
-          <Icone size={20} className="text-accent transi" />
+    <div className="surface rounded-3xl overflow-hidden">
+      <div className="flex items-center gap-3 p-2.5 pl-3.5">
+        <span className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 transi ${coche ? "bg-accent-soft" : "bg-carte2"}`}>
+          <Icone size={18} className={`transi ${coche ? "text-accent" : "text-douce"}`} />
         </span>
-        <p className={`flex-1 font-bold text-sm ${coche ? "text-brume" : ""}`}>{etiquette}</p>
+        <button onClick={surOuvrir} aria-expanded={!!ouvert} className="flex-1 min-w-0 text-left py-1">
+          <span className={`block font-bold text-[15px] transi ${coche ? "text-brume" : ""}`}>{etiquette}</span>
+          {detail && <span className="block text-xs text-brume mt-0.5">{detail}</span>}
+        </button>
         <CaseCoche coche={coche} surClic={surCoche} />
       </div>
-      <div className={coche ? "opacity-50 mt-3" : "mt-3"}>{children}</div>
+      {ouvert && <div className="px-4 pb-4 pt-0.5 deplie">{children}</div>}
     </div>
+  );
+}
+
+/* Pastille d'état d'un exercice : numéro, anneau de séries, ou coche */
+function StatutExo({ numero, coche, estAjout, fait, total, surClic }) {
+  return (
+    <button
+      onClick={surClic}
+      aria-pressed={coche}
+      aria-label={coche ? "Marquer comme à faire" : "Marquer comme fait"}
+      className="shrink-0 h-11 w-11 flex items-center justify-center active:scale-90 transi"
+    >
+      {coche ? (
+        <span className="h-10 w-10 rounded-full bg-accent flex items-center justify-center">
+          <Check size={19} strokeWidth={3.2} className="text-accent-ink pop" />
+        </span>
+      ) : fait > 0 ? (
+        <Anneau fait={fait} total={total} taille={40} epaisseur={3.5}>
+          <span className="text-[13px] font-extrabold chiffres">{numero}</span>
+        </Anneau>
+      ) : (
+        <span className="h-10 w-10 rounded-full bg-carte2 flex items-center justify-center text-[14px] font-extrabold chiffres text-douce">
+          {estAjout ? <Plus size={16} /> : numero}
+        </span>
+      )}
+    </button>
   );
 }
 
 function CarteExo({
   numero, total, exo, nomOriginal, estAjout, variantes = [], profil, niveau, coche, seriesFaites,
-  chargesLignes, minutes, poids, dernierePerf, tabata, rounds,
-  surCoche, surSeries, surRoue, surRoueSerie, surRoueDuree, surRepos, surVariante, surTabata,
+  chargesLignes, minutes, poids, dernierePerf, tabata, rounds, ouvert, modeOrdre,
+  surOuvrir, surCoche, surSeries, surRoue, surRoueSerie, surRoueDuree, surRepos, surVariante, surTabata,
   surRetirer, surRoundsCycle, surMonter, surDescendre,
 }) {
   const aVariantes = variantes.length > 1;
@@ -6236,12 +6995,11 @@ function CarteExo({
   const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const [glisse, setGlisse] = useState(0);
   const depart = useRef(null);
-  /* consignes techniques repliées pour un exercice déjà pratiqué :
-     la carte reste courte, le schéma des muscles reste visible */
+  /* consignes techniques repliées pour un exercice déjà pratiqué */
   const [technique, setTechnique] = useState(!dernierePerf);
 
   function toucheDebut(e) {
-    if (!aVariantes) return;
+    if (!aVariantes || !ouvert) return;
     depart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   }
   function toucheBouge(e) {
@@ -6258,163 +7016,183 @@ function CarteExo({
     depart.current = null;
   }
 
-  const muscles = (exo.muscles || []).map((m) => MUSCLES_LIBELLES[m]).filter(Boolean).join(" · ") || "—";
+  /* résumé sur une ligne (carte repliée) */
+  const chargesFaites = parSerie ? chargesLignes.slice(0, seriesFaites).filter(Boolean) : [];
+  const texteChargesFaites = chargesFaites.length
+    ? ` · ${new Set(chargesFaites).size === 1 ? chargesFaites[0] : chargesFaites.join(" / ")} kg`
+    : "";
+  const resume = tabata
+    ? `${rounds} rounds · ${tabata.travail} s / ${tabata.repos} s`
+    : continu
+    ? `${minutes} min en continu`
+    : seriesFaites > 0
+    ? `${seriesFaites}/${exo.series} séries${texteChargesFaites}`
+    : `${exo.series} × ${exo.reps}${parSerie && chargesLignes[0] ? ` · ${chargesLignes[0]} kg` : ""}`;
 
+  const muscles = (exo.muscles || []).map((m) => MUSCLES_LIBELLES[m]).filter(Boolean).join(" · ") || "—";
+  const consigne = (exo.charge && (exo.charge[niveau] || exo.charge.standard)) || "";
+
+  /* ---------- carte repliée ---------- */
+  if (!ouvert) {
+    return (
+      <div className={`surface rounded-3xl transi ${coche ? "opacity-80" : ""}`}>
+        <div className="flex items-center gap-2 p-2.5 pl-2.5">
+          <StatutExo
+            numero={numero}
+            coche={coche}
+            estAjout={estAjout}
+            fait={tabata || continu ? 0 : seriesFaites}
+            total={exo.series}
+            surClic={surCoche}
+          />
+          <button onClick={surOuvrir} aria-expanded={false} className="flex-1 min-w-0 text-left py-1">
+            <span className={`block font-bold text-[15px] truncate transi ${coche ? "text-brume" : ""}`}>{exo.nom}</span>
+            <span className="block text-xs text-brume truncate mt-0.5 chiffres">
+              {estAjout ? "Ajout · " : ""}{resume}
+            </span>
+          </button>
+          {modeOrdre ? (
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={surMonter || undefined}
+                disabled={!surMonter}
+                aria-label={`Monter ${exo.nom} dans la séance`}
+                className={`h-10 w-10 rounded-full bg-carte2 flex items-center justify-center transi ${surMonter ? "active:scale-95" : "opacity-30"}`}
+              >
+                <ChevronUp size={17} className="text-douce" />
+              </button>
+              <button
+                onClick={surDescendre || undefined}
+                disabled={!surDescendre}
+                aria-label={`Descendre ${exo.nom} dans la séance`}
+                className={`h-10 w-10 rounded-full bg-carte2 flex items-center justify-center transi ${surDescendre ? "active:scale-95" : "opacity-30"}`}
+              >
+                <ChevronDown size={17} className="text-douce" />
+              </button>
+            </div>
+          ) : (
+            <button onClick={surOuvrir} aria-label={`Ouvrir ${exo.nom}`} className="h-10 w-8 flex items-center justify-center shrink-0">
+              <ChevronDown size={18} className="text-sourd" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- carte dépliée : l'exercice en cours ---------- */
   return (
     <div
       onTouchStart={toucheDebut}
       onTouchMove={toucheBouge}
       onTouchEnd={toucheFin}
-      className={`rounded-2xl bg-carte border p-4 transi ${coche ? "bordure-accent-douce" : "border-ligne"}`}
+      className="surface rounded-4xl contour-accent p-4 pt-3 deplie"
       style={{
         touchAction: "pan-y",
         transform: glisse ? `translateX(${glisse}px)` : undefined,
         transition: glisse ? "none" : "transform 0.2s ease",
       }}
     >
-      <div className="flex items-start gap-3">
-        <div className={`flex-1 min-w-0 ${coche ? "opacity-60" : ""}`}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-accent-soft text-accent transi">
-              {exo.zone}
-            </span>
-            <span className="text-brume text-xs chiffres">
-              {estAjout ? "Ajout" : `Exo ${numero}/${total}`}
-            </span>
-            {estAjout && surRoundsCycle && (
-              <button
-                onClick={surRoundsCycle}
-                aria-label="Changer le nombre de rounds"
-                className="text-xs font-extrabold chiffres px-2 py-0.5 rounded-full bg-carte2 text-accent active:scale-95 transi"
-              >
-                ×{rounds}
-              </button>
-            )}
-            {aVariantes && (
-              <button
-                onClick={() => surVariante(1)}
-                aria-label={`Changer d'exercice (${variantes.length} variantes)`}
-                className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-carte2 text-douce active:scale-95 transi"
-              >
-                <ArrowLeftRight size={11} className="text-accent transi" />
-                variante {variantes.findIndex((e) => e.id === exo.id) + 1}/{variantes.length}
-              </button>
-            )}
-          </div>
-          <h3 className="font-bold text-base mt-1.5 leading-snug">{exo.nom}</h3>
-          {nomOriginal && (
-            <p className="text-xs text-accent transi mt-0.5">En remplacement de : {nomOriginal}</p>
-          )}
-          <p className="text-sm mt-1 chiffres">
-            {tabata ? (
-              <>
-                <strong className="text-accent transi">{rounds} rounds</strong>
-                <span className="text-brume"> · {tabata.travail} s effort / {tabata.repos} s repos</span>
-              </>
-            ) : continu ? (
-              <>
-                <strong className="text-accent transi">{exo.duree} min</strong>
-                <span className="text-brume"> · en continu</span>
-              </>
-            ) : (
-              <>
-                <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
-                <span className="text-brume"> · repos {exo.repos} s</span>
-              </>
-            )}
-          </p>
-          {/* le réglage d'intensité du cardio reste toujours affiché */}
-          {(continu || !dernierePerf) && (
-            <p className="text-xs text-douce mt-1.5 leading-relaxed">{(exo.charge && (exo.charge[niveau] || exo.charge.standard)) || ""}</p>
-          )}
-          {dernierePerf && (
-            <p className="text-xs mt-1.5 leading-relaxed">
-              <span className="text-accent transi font-bold">Dernière fois :</span>{" "}
-              <span className="text-douce chiffres">{texteDetail(dernierePerf)}</span>
-              <span className="text-brume"> · {FORMAT_MINI.format(depuisCle(dernierePerf.d))}</span>
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-center gap-2 shrink-0">
-          <CaseCoche coche={coche} surClic={surCoche} />
-          <div className="flex items-center gap-1">
-            <button
-              onClick={surMonter || undefined}
-              disabled={!surMonter}
-              aria-label={`Monter ${exo.nom} dans la séance`}
-              className={`h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center transi ${
-                surMonter ? "active:scale-95" : "opacity-30"
-              }`}
-            >
-              <ChevronUp size={16} className="text-brume" />
-            </button>
-            <button
-              onClick={surDescendre || undefined}
-              disabled={!surDescendre}
-              aria-label={`Descendre ${exo.nom} dans la séance`}
-              className={`h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center transi ${
-                surDescendre ? "active:scale-95" : "opacity-30"
-              }`}
-            >
-              <ChevronDown size={16} className="text-brume" />
-            </button>
-          </div>
-          {surRetirer && (
-            <button
-              onClick={surRetirer}
-              aria-label={`Retirer ${exo.nom} de la séance`}
-              className="h-8 w-8 rounded-lg bg-carte2 flex items-center justify-center active:scale-95 transi"
-            >
-              <Trash2 size={15} className="text-brume" />
-            </button>
-          )}
-        </div>
+      <div className="flex items-start gap-2 -ml-1.5">
+        <StatutExo
+          numero={numero}
+          coche={coche}
+          estAjout={estAjout}
+          fait={tabata || continu ? 0 : seriesFaites}
+          total={exo.series}
+          surClic={surCoche}
+        />
+        <button onClick={surOuvrir} aria-expanded className="flex-1 min-w-0 text-left pt-1">
+          <span className="flex items-center gap-1.5 flex-wrap text-[11px] font-bold">
+            <span className="text-accent transi uppercase tracking-wider">{exo.zone}</span>
+            <span className="text-sourd">·</span>
+            <span className="text-brume chiffres">{estAjout ? "Ajout du jour" : `Exo ${numero}/${total}`}</span>
+          </span>
+          <span className="block font-extrabold text-[19px] leading-tight tracking-tight mt-1">{exo.nom}</span>
+        </button>
+        <button onClick={surOuvrir} aria-label={`Replier ${exo.nom}`} className="h-10 w-8 flex items-center justify-center shrink-0">
+          <ChevronUp size={18} className="text-sourd" />
+        </button>
       </div>
+
+      {nomOriginal && (
+        <p className="text-xs text-accent transi mt-1.5">En remplacement de : {nomOriginal}</p>
+      )}
+
+      {/* objectif + repère (dernière fois ou consigne) */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span className="px-2.5 py-1 rounded-full bg-accent-soft text-accent text-xs font-extrabold chiffres transi">
+          {tabata ? `${rounds} rounds` : continu ? `${exo.duree} min` : `${exo.series} × ${exo.reps}`}
+        </span>
+        <span className="px-2.5 py-1 rounded-full bg-carte2 text-brume text-xs font-semibold chiffres">
+          {tabata ? `${tabata.travail} s / ${tabata.repos} s` : continu ? "en continu" : `repos ${exo.repos} s`}
+        </span>
+        {estAjout && surRoundsCycle && (
+          <button
+            onClick={surRoundsCycle}
+            aria-label="Changer le nombre de rounds"
+            className="px-2.5 py-1 rounded-full bg-carte2 text-accent text-xs font-extrabold chiffres active:scale-95 transi"
+          >
+            ×{rounds}
+          </button>
+        )}
+      </div>
+      {(continu || !dernierePerf) && consigne && (
+        <p className="text-[13px] text-douce mt-2.5 leading-relaxed">{consigne}</p>
+      )}
+      {dernierePerf && (
+        <p className="text-[13px] mt-2 leading-relaxed">
+          <span className="text-brume">Dernière fois · </span>
+          <span className="text-douce font-semibold chiffres">{texteDetail(dernierePerf)}</span>
+          <span className="text-sourd"> · {FORMAT_MINI.format(depuisCle(dernierePerf.d))}</span>
+        </p>
+      )}
 
       {/* tableau des séries : une ligne par série, avec SA charge */}
       {parSerie && (
-        <div className="mt-3 rounded-xl bg-fond p-1.5">
-          <div
-            className="flex items-center gap-2 px-1.5 pt-0.5 pb-1 text-brume font-bold uppercase tracking-wide"
-            style={{ fontSize: 10 }}
-          >
+        <div className="mt-4">
+          <div className="flex items-center gap-2 px-1 pb-1.5 text-sourd font-bold uppercase tracking-wider" style={{ fontSize: 10 }}>
             <span className="w-7 text-center">Série</span>
             <span className="flex-1 pl-1">Charge</span>
-            <span className="w-14 text-center">Reps</span>
-            <span className="w-10 text-center">Fait</span>
+            <span className="w-12 text-center">Reps</span>
+            <span className="w-11 text-center">Fait</span>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {chargesLignes.map((c, i) => {
               const faite = i < seriesFaites;
+              const prochaine = i === seriesFaites;
               return (
                 <div
                   key={i}
-                  className={`flex items-center gap-2 rounded-lg px-1.5 transi ${faite ? "bg-accent-soft" : ""}`}
-                  style={{ height: 48 }}
+                  className={`flex items-center gap-2 rounded-2xl px-1 transi ${faite ? "bg-accent-soft" : prochaine ? "bg-carte2" : ""}`}
+                  style={{ height: 52 }}
                 >
-                  <span className={`w-7 text-center text-sm font-extrabold chiffres transi ${faite ? "text-accent" : "text-brume"}`}>
+                  <span className={`w-7 text-center text-[15px] font-extrabold chiffres transi ${faite ? "text-accent" : prochaine ? "text-encre" : "text-sourd"}`}>
                     {i + 1}
                   </span>
                   <button
                     onClick={() => surRoueSerie(i)}
                     aria-label={`Charge de la série ${i + 1} : ${c || "non renseignée"}`}
-                    className="flex-1 min-w-0 h-10 rounded-lg bg-carte2 px-3 flex items-center gap-1.5 active:scale-98 transi"
+                    className={`flex-1 min-w-0 h-10 rounded-xl px-3 flex items-center gap-1.5 active:scale-98 transi ${
+                      prochaine ? "bg-carte3" : faite ? "bg-transparent" : "bg-carte2"
+                    }`}
                   >
-                    <span className="flex-1 min-w-0 text-left font-extrabold chiffres text-base truncate">{c || "—"}</span>
+                    <span className="flex-1 min-w-0 text-left font-extrabold chiffres text-[17px] truncate">{c || "—"}</span>
                     <span className="text-xs text-brume shrink-0">kg</span>
-                    <ChevronDown size={13} className="text-brume shrink-0" />
+                    <ChevronDown size={13} className="text-sourd shrink-0" />
                   </button>
-                  <span className="w-14 text-center text-xs text-brume chiffres truncate">{exo.reps}</span>
+                  <span className="w-12 text-center text-xs text-brume chiffres truncate">{exo.reps}</span>
                   <button
                     onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
                     aria-pressed={faite}
                     aria-label={`Série ${i + 1} ${faite ? "faite" : "à faire"}`}
-                    className="w-10 h-10 flex items-center justify-center shrink-0"
+                    className="w-11 h-11 flex items-center justify-center shrink-0"
                   >
                     <span
                       className={`h-9 w-9 rounded-full flex items-center justify-center transi ${
-                        faite ? "bg-accent" : "border-2 border-slate-600 active:scale-95"
+                        faite ? "bg-accent" : prochaine ? "border-2 battement" : "border-2 border-carte3"
                       }`}
+                      style={!faite && prochaine ? { borderColor: "var(--accent-bordure)" } : undefined}
                     >
                       {faite && <Check size={17} strokeWidth={3.5} className="text-accent-ink pop" />}
                     </span>
@@ -6423,21 +7201,21 @@ function CarteExo({
               );
             })}
           </div>
-          <div className="flex items-center gap-2 pt-1.5">
+          <div className="flex items-center gap-2 pt-2.5">
             {seriesFaites >= exo.series && chargesLignes.length < 8 ? (
               <button
                 onClick={() => surSeries(seriesFaites + 1)}
-                className="h-10 px-3 rounded-lg text-brume text-xs font-bold flex items-center gap-1 active:scale-95 transi"
+                className="h-10 px-3.5 rounded-full bg-carte2 text-douce text-xs font-bold flex items-center gap-1 active:scale-95 transi"
               >
                 <Plus size={14} /> Série bonus
               </button>
             ) : (
-              <span className="text-xs text-brume chiffres px-2">{seriesFaites}/{exo.series} séries</span>
+              <span className="text-xs text-brume chiffres px-1">{seriesFaites}/{exo.series} séries</span>
             )}
             <span className="flex-1" />
             <button
               onClick={surRepos}
-              className="h-10 px-3 rounded-lg bg-carte2 text-xs font-bold flex items-center gap-1.5 active:scale-95 transi"
+              className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold flex items-center gap-1.5 active:scale-95 transi"
             >
               <Timer size={15} className="text-accent transi" />
               Repos {exo.repos} s
@@ -6448,41 +7226,42 @@ function CarteExo({
 
       {/* au poids du corps : des pastilles suffisent */}
       {!tabata && !continu && !parSerie && (
-        <>
-          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-brume font-bold mr-1">Séries</span>
+        <div className="mt-4">
+          <div className="flex items-center gap-2 flex-wrap">
             {Array.from({ length: nbPastilles }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
                 aria-label={`Série ${i + 1} ${i < seriesFaites ? "faite" : "à faire"}`}
-                className={`h-9 w-9 rounded-full text-xs font-extrabold chiffres transi ${
+                className={`h-11 w-11 rounded-full text-sm font-extrabold chiffres transi ${
                   i < seriesFaites ? "bg-accent text-accent-ink" : "bg-carte2 text-brume active:scale-95"
                 }`}
               >
-                {i < seriesFaites ? <Check size={15} strokeWidth={3.5} className="mx-auto pop" /> : i + 1}
+                {i < seriesFaites ? <Check size={17} strokeWidth={3.5} className="mx-auto pop" /> : i + 1}
               </button>
             ))}
             {seriesFaites >= exo.series && nbPastilles < 6 && (
               <button
                 onClick={() => surSeries(seriesFaites + 1)}
                 aria-label="Ajouter une série bonus"
-                className="h-9 w-9 rounded-full bg-carte2 text-brume flex items-center justify-center active:scale-95 transi"
+                className="h-11 w-11 rounded-full border border-dashed border-carte3 text-brume flex items-center justify-center active:scale-95 transi"
               >
-                <Plus size={15} />
+                <Plus size={16} />
               </button>
             )}
-            <span className="text-xs text-brume chiffres ml-auto">{seriesFaites}/{exo.series}</span>
           </div>
-          <button
-            onClick={surRepos}
-            className="mt-3 w-full rounded-xl bg-carte2 px-4 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transi"
-            style={{ height: 48 }}
-          >
-            <Timer size={17} className="text-accent transi" />
-            Repos {exo.repos} s
-          </button>
-        </>
+          <div className="flex items-center gap-2 pt-3">
+            <span className="text-xs text-brume chiffres px-1">{seriesFaites}/{exo.series} séries</span>
+            <span className="flex-1" />
+            <button
+              onClick={surRepos}
+              className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold flex items-center gap-1.5 active:scale-95 transi"
+            >
+              <Timer size={15} className="text-accent transi" />
+              Repos {exo.repos} s
+            </button>
+          </div>
+        </div>
       )}
 
       {/* cardio continu : on note le temps fait */}
@@ -6490,64 +7269,91 @@ function CarteExo({
         <button
           onClick={surRoueDuree}
           aria-label={`Durée faite sur ${exo.nom} : ${minutes} minutes`}
-          className="mt-3 w-full flex items-center gap-2 rounded-xl bg-carte2 px-3 text-left active:scale-98 transi"
-          style={{ height: 48 }}
+          className="mt-4 w-full flex items-center gap-3 rounded-2xl bg-carte2 px-4 text-left active:scale-98 transi"
+          style={{ height: 60 }}
         >
-          <Timer size={16} className="text-accent shrink-0 transi" />
-          <span className="text-xs text-brume shrink-0">Durée</span>
-          <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-base">{minutes}</span>
-          <span className="text-xs text-brume shrink-0">min</span>
-          <ChevronDown size={14} className="text-brume shrink-0" />
+          <Timer size={18} className="text-accent shrink-0 transi" />
+          <span className="text-sm text-brume shrink-0">Durée faite</span>
+          <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-[22px]">{minutes}</span>
+          <span className="text-sm text-brume shrink-0">min</span>
+          <ChevronDown size={15} className="text-sourd shrink-0" />
         </button>
       )}
 
       {/* tabata : charge unique et chrono guidé */}
       {tabata && (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-4 flex items-center gap-2">
           {!exo.sansCharge && (
             <button
               onClick={surRoue}
               aria-label={`Charge utilisée pour ${exo.nom} : ${poids || "non renseignée"}`}
-              className="flex-1 flex items-center gap-2 rounded-xl bg-carte2 px-3 text-left active:scale-98 transi"
-              style={{ height: 48 }}
+              className="flex-1 flex items-center gap-2 rounded-2xl bg-carte2 px-4 text-left active:scale-98 transi"
+              style={{ height: 52 }}
             >
               <span className="text-xs text-brume shrink-0">Charge</span>
-              <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-base truncate">
-                {poids || "—"}
-              </span>
+              <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-base truncate">{poids || "—"}</span>
               <span className="text-xs text-brume shrink-0">kg</span>
-              <ChevronDown size={14} className="text-brume shrink-0" />
             </button>
           )}
           <button
             onClick={surTabata}
-            className={`rounded-xl bg-accent text-accent-ink px-4 font-extrabold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
-            style={{ height: 48 }}
+            className={`rounded-2xl bg-accent text-accent-ink px-5 font-extrabold text-sm flex items-center justify-center gap-2 active:scale-95 transi lueur-accent ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
+            style={{ height: 52 }}
           >
-            <Play size={16} strokeWidth={2.5} />
+            <Play size={16} strokeWidth={2.6} className="fill-current" />
             Lancer · ≈ {Math.max(1, Math.round((5 + rounds * tabata.travail + (rounds - 1) * tabata.repos) / 60))} min
           </button>
         </div>
       )}
 
-      {/* muscles toujours visibles ; consignes techniques dépliables */}
-      <button
-        onClick={() => setTechnique(!technique)}
-        aria-expanded={technique}
-        className={`mt-3 w-full flex items-center gap-3 rounded-xl bg-fond p-2 pr-3 text-left transi ${coche ? "opacity-50" : ""}`}
-      >
-        <SchemaMuscles muscles={exo.muscles || []} hauteur={46} />
-        <span className="flex-1 min-w-0 text-xs text-douce leading-snug">{muscles}</span>
-        <span className="text-xs font-bold text-brume shrink-0 flex items-center gap-1">
+      {/* actions secondaires */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {aVariantes && (
+          <button
+            onClick={() => surVariante(1)}
+            aria-label={`Changer d'exercice (${variantes.length} variantes)`}
+            className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold text-douce flex items-center gap-1.5 active:scale-95 transi"
+          >
+            <ArrowLeftRight size={14} className="text-accent transi" />
+            Variante {variantes.findIndex((e) => e.id === exo.id) + 1}/{variantes.length}
+          </button>
+        )}
+        <button
+          onClick={() => setTechnique(!technique)}
+          aria-expanded={technique}
+          className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold text-douce flex items-center gap-1.5 active:scale-95 transi"
+        >
+          <Info size={14} className="text-accent transi" />
           Technique
-          <ChevronDown size={14} className={`transi ${technique ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+          <ChevronDown size={13} className={`transi ${technique ? "rotate-180" : ""}`} />
+        </button>
+        {surRetirer && (
+          <button
+            onClick={surRetirer}
+            aria-label={`Retirer ${exo.nom} de la séance`}
+            className="h-10 px-3.5 rounded-full bg-carte2 text-xs font-bold text-brume flex items-center gap-1.5 active:scale-95 transi"
+          >
+            <Trash2 size={14} /> Retirer
+          </button>
+        )}
+      </div>
+      {aVariantes && (
+        <p className="text-[11px] text-sourd mt-2 px-1">Glisse la carte sur le côté pour changer d’exercice.</p>
+      )}
+
+      {/* muscles toujours visibles ; consignes techniques dépliables */}
+      <div className="mt-3 rounded-2xl bg-carte2 p-3 flex items-center gap-3">
+        <SchemaMuscles muscles={exo.muscles || []} hauteur={technique ? 92 : 50} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold text-sourd uppercase tracking-wider">Muscles</p>
+          <p className="text-xs text-douce mt-1 leading-snug">{muscles}</p>
+        </div>
+      </div>
       {technique && (exo.conseil || exo.variante) && (
-        <div className={`px-1 vue ${coche ? "opacity-50" : ""}`}>
-          {exo.conseil ? <p className="text-xs text-brume mt-2.5 leading-relaxed">{exo.conseil}</p> : null}
+        <div className="px-1 deplie">
+          {exo.conseil ? <p className="text-[13px] text-douce mt-3 leading-relaxed">{exo.conseil}</p> : null}
           {exo.variante ? (
-            <p className="text-xs text-brume mt-1.5 leading-relaxed italic">Variante : {exo.variante}</p>
+            <p className="text-xs text-brume mt-2 leading-relaxed italic">Variante : {exo.variante}</p>
           ) : null}
         </div>
       )}
