@@ -15,6 +15,40 @@ npx http-server dist -c-1
 - Persistance : `window.storage` → repli IndexedDB → mémoire. Jamais localStorage.
 - `node serveur-e2e.mjs` sert `dist/` **et** les fonctions `api/` avec un Redis simulé (port 4531) : pratique pour tester la synchro, les espaces et les codes sans rien déployer.
 
+## En séance
+
+- **Une charge par série** : chaque exercice affiche un tableau série / charge / reps / fait.
+  Les charges proposées reprennent celles de la dernière fois, série par série ; en changer
+  une la reporte sur les séries suivantes. L'historique garde le détail (« 50 / 52,5 / 55 kg »)
+  et la courbe de progrès suit la série la plus lourde.
+- **Variantes sans doublon** : le swipe ne propose jamais un exercice déjà présent dans le
+  programme (toutes séances confondues) ni déjà affiché dans la séance. Le bouton
+  « Ajouter un exercice » grise ceux qui sont déjà dans la séance.
+- **Validation automatique** : une séance commencée (une coche, une série, une charge ou une
+  durée notée) puis oubliée est validée toute seule à sa date, dès que l'app est rouverte un
+  autre jour (et au moins 3 h après la dernière action, pour ne pas couper une séance à cheval
+  sur minuit). Elle apparaît avec un badge « auto » dans l'historique, où on peut la supprimer.
+  Avec la synchro, un téléphone ne le fait qu'avec des données fraîches du serveur.
+
+## Cardio
+
+12 exercices : 7 en continu (marche inclinée, marche rapide, footing, vélo, elliptique,
+rameur, stepper — on note les minutes faites) et 5 en fractionné (corde à sauter, jumping
+jacks, montées de genoux, burpees, squats sautés). Chacun donne des réglages par niveau
+(pente, watts, cadence…). Un cardio continu dans une séance perso remplace l'étape de cardio
+générique.
+
+Sources : l'énergie dépensée utilise les valeurs MET du
+[2024 Adult Compendium of Physical Activities](https://pacompendium.com) (Herrmann et al.,
+*J Sport Health Sci* 2024 — code de l'activité en commentaire dans `App.jsx`) ; les repères de
+volume viennent des recommandations de l'OMS (2020).
+
+## Corbeille
+
+Supprimer un programme le met à la corbeille (bouton **Annuler** pendant quelques secondes,
+puis **Mon programme → Corbeille**). Il y reste 3 jours, restaurable avec ses séances en
+cours, puis s'efface tout seul.
+
 ## Déploiement
 
 Vercel : build `npm run build`, dossier de sortie `dist` (voir `vercel.json`). Le dossier `api/` est déployé automatiquement en fonctions serverless.

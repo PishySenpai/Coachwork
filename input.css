@@ -102,6 +102,14 @@ body.fige .coquille {
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
 }
 
+/* message éphémère : sous l'encoche / la barre d'état */
+.toast-haut {
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+}
+.ombre-toast {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
 /* roue de sélection (façon iOS) : défilement aimanté, scrollbar masquée */
 .roue {
   overflow-y: auto;

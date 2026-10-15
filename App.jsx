@@ -5,6 +5,7 @@ import {
   Wind, Leaf, Moon, ShieldCheck, Sparkles, TrendingUp, X, Plus, Salad,
   Stethoscope, Scale, Ruler, Cloud, CloudOff, Pencil, Trash2, Search,
   ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause, Share2, Download,
+  RotateCcw,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -688,13 +689,13 @@ const EXOS = {
   },
   ecarte: {
     id: "ecarte",
-    nom: "Écarté à la poulie (ou pec deck)",
+    nom: "Écarté à la poulie vis-à-vis",
     zone: "Poitrine",
     series: 3,
     reps: "12",
     repos: 60,
     charge: { standard: "Départ conseillé : 10–15 kg par côté", doux: "Départ conseillé : 5–7,5 kg par côté" },
-    variante: "Pec deck (machine papillon), plus guidé.",
+    variante: "Butterfly à la machine si les poulies sont prises.",
     conseil: "Bras presque tendus, grand mouvement d’accolade. Reste léger : c’est un exercice de finition.",
   },
   dips: {
@@ -973,6 +974,180 @@ const EXOS = {
     variante: "Chaise, banc ou marche : tout support stable fait l’affaire.",
     conseil: "Pied arrière posé sur le support, tout le poids sur la jambe avant. Descends droit, genou avant au-dessus de la cheville.",
   },
+
+  /* --- Cardio. Dépense estimée avec les valeurs MET du 2024 Adult
+     Compendium of Physical Activities (Herrmann et al., J Sport Health
+     Sci 2024) — code de l'activité en commentaire.
+     Cardio continu : `duree` (minutes), on note le temps fait.
+     Cardio fractionné : séries classiques, au poids du corps. --- */
+  "marche-inclinee": {
+    id: "marche-inclinee",
+    nom: "Marche inclinée sur tapis",
+    zone: "Cardio",
+    series: 1, reps: "20 min", repos: 0, duree: 20,
+    sansCharge: true,
+    met: { standard: 7.0, doux: 5.3 }, // 17035 (pente 6–10 %) · 17034 (pente 1–5 %)
+    charge: {
+      standard: "Pente 6–10 %, 5 à 5,5 km/h, sans te tenir aux barres",
+      doux: "Pente 1–5 %, 4,5 à 5 km/h, à une allure où tu peux parler",
+    },
+    variante: "Dehors : une côte ou un chemin vallonné, à pas soutenus.",
+    conseil: "Lâche les barres : s’y tenir enlève une bonne partie du travail. Buste droit, foulée naturelle — augmente la pente avant la vitesse.",
+  },
+  "marche-rapide": {
+    id: "marche-rapide",
+    nom: "Marche rapide",
+    zone: "Cardio",
+    series: 1, reps: "30 min", repos: 0, duree: 30,
+    sansCharge: true,
+    met: { standard: 5.5, doux: 4.8 }, // 17220 (6,5–7 km/h) · 17200 (5,5–6,2 km/h)
+    charge: {
+      standard: "6,5 à 7 km/h, sur tapis à plat ou dehors",
+      doux: "5,5 à 6 km/h : le souffle un peu court, la conversation possible",
+    },
+    variante: "Parfaite les jours de repos : elle aide à récupérer sans fatiguer.",
+    conseil: "Pas rapides plutôt que longs, bras qui balancent. Le bon rythme : tu peux parler, pas chanter.",
+  },
+  course: {
+    id: "course",
+    nom: "Course à pied (footing)",
+    zone: "Cardio",
+    series: 1, reps: "20 min", repos: 0, duree: 20,
+    sansCharge: true,
+    met: { standard: 8.5, doux: 6.0 }, // 12030 (8–8,4 km/h) · 12010 (marche-course alternée)
+    charge: {
+      standard: "8 à 9 km/h, souffle régulier",
+      doux: "Alterne 2 min de marche rapide et 1 min de trot léger",
+    },
+    variante: "Sur tapis, règle 1 % de pente : c’est plus proche de la course dehors.",
+    conseil: "Petites foulées, le pied se pose sous le corps et pas loin devant. Plus capable de dire une phrase entière ? Ralentis.",
+  },
+  velo: {
+    id: "velo",
+    nom: "Vélo d’appartement",
+    zone: "Cardio",
+    series: 1, reps: "20 min", repos: 0, duree: 20,
+    sansCharge: true,
+    met: { standard: 6.8, doux: 5.0 }, // 01224 (101–125 W) · 01216 (60 W)
+    charge: {
+      standard: "100 à 125 W, cadence 80–90 tr/min",
+      doux: "50 à 70 W, cadence souple — zéro impact pour les genoux",
+    },
+    variante: "Version semi-allongée (dos soutenu) si ta salle en a une.",
+    conseil: "Selle réglée : jambe presque tendue quand la pédale est en bas. Mouline plutôt que d’écraser les pédales.",
+  },
+  elliptique: {
+    id: "elliptique",
+    nom: "Vélo elliptique",
+    zone: "Cardio",
+    series: 1, reps: "20 min", repos: 0, duree: 20,
+    sansCharge: true,
+    met: { standard: 5.0, doux: 5.0 }, // 02048 (effort modéré)
+    charge: {
+      standard: "Résistance moyenne, une accélération d’1 min toutes les 3 min",
+      doux: "Résistance légère, allure régulière — aucun impact",
+    },
+    variante: "Sans les poignées pour travailler l’équilibre et la sangle abdominale.",
+    conseil: "Pousse et tire les poignées : les bras participent. Les talons restent en contact avec les pédales.",
+  },
+  rameur: {
+    id: "rameur",
+    nom: "Rameur",
+    zone: "Cardio",
+    series: 1, reps: "15 min", repos: 0, duree: 15,
+    sansCharge: true,
+    met: { standard: 7.5, doux: 5.0 }, // 02072 (100–149 W) · 02071 (moins de 100 W)
+    charge: {
+      standard: "100 à 150 W, 22 à 26 coups par minute",
+      doux: "Moins de 100 W, 18 à 22 coups par minute, sans forcer",
+    },
+    variante: "Le dos tire ? Passe sur le vélo ou l’elliptique.",
+    conseil: "À l’aller : jambes, puis buste, puis bras — et l’inverse au retour. Dos droit : ce sont surtout les jambes qui poussent.",
+  },
+  stepper: {
+    id: "stepper",
+    nom: "Stepper (simulateur d’escalier)",
+    zone: "Cardio",
+    series: 1, reps: "15 min", repos: 0, duree: 15,
+    sansCharge: true,
+    met: 9.3, // 02065
+    charge: {
+      standard: "Rythme régulier que tu peux tenir tout du long",
+      doux: "Rythme lent, 10 min pour commencer — le vélo si les genoux protestent",
+    },
+    variante: "De vrais escaliers, à ton rythme.",
+    conseil: "Tout le pied sur la marche, buste droit. Effleure les poignées sans t’y appuyer de tout ton poids.",
+  },
+  "corde-a-sauter": {
+    id: "corde-a-sauter",
+    nom: "Corde à sauter",
+    zone: "Cardio",
+    series: 5, reps: "1 min", repos: 45,
+    sansCharge: true,
+    met: { standard: 11.0, doux: 4.8 }, // 02068 · 12025 (trottiner sur place)
+    charge: {
+      standard: "Rythme régulier, petits sauts",
+      doux: "Sans corde : petits pas sautillés sur place, à ton rythme",
+    },
+    variante: "Corde imaginaire si le plafond ou les genoux ne suivent pas.",
+    conseil: "Sauts de 2–3 cm seulement, sur l’avant du pied. Ce sont les poignets qui font tourner la corde, pas les épaules.",
+  },
+  "jumping-jacks": {
+    id: "jumping-jacks",
+    nom: "Jumping jacks",
+    zone: "Cardio",
+    series: 3, reps: "40 s", repos: 30,
+    sansCharge: true,
+    met: { standard: 7.5, doux: 3.8 }, // 02020 (vigoureux) · 02022 (modéré)
+    charge: {
+      standard: "Rythme vif, réception souple",
+      doux: "Sans saut : un pas sur le côté, les bras qui montent",
+    },
+    variante: "Version sans saut pour ménager les genoux.",
+    conseil: "Réception sur l’avant du pied, genoux légèrement fléchis. Les bras se rejoignent au-dessus de la tête.",
+  },
+  "montees-genoux": {
+    id: "montees-genoux",
+    nom: "Montées de genoux",
+    zone: "Cardio",
+    series: 3, reps: "30 s", repos: 30,
+    sansCharge: true,
+    met: { standard: 7.5, doux: 3.8 }, // 02020 · 02022
+    charge: {
+      standard: "Genoux à hauteur de hanches, rythme vif",
+      doux: "En marchant sur place, genoux hauts, sans sauter",
+    },
+    variante: "Talons-fesses pour varier.",
+    conseil: "Buste droit, ventre serré, les bras accompagnent. Reste sur l’avant des pieds.",
+  },
+  burpees: {
+    id: "burpees",
+    nom: "Burpees",
+    zone: "Cardio",
+    series: 3, reps: "10", repos: 60,
+    sansCharge: true,
+    met: { standard: 7.5, doux: 3.8 }, // 02020 · 02022
+    charge: {
+      standard: "Avec la pompe et le saut",
+      doux: "Sans saut ni pompe, mains sur un banc, pieds qui reculent en marchant",
+    },
+    variante: "Mains sur un banc pour une version plus douce.",
+    conseil: "Accroupis-toi, mains au sol, pieds en arrière, retour, puis saut bras en l’air. La qualité avant la vitesse : dos gainé à chaque passage.",
+  },
+  "squat-saute": {
+    id: "squat-saute",
+    nom: "Squats sautés",
+    zone: "Cardio",
+    series: 3, reps: "12", repos: 60,
+    sansCharge: true,
+    met: { standard: 7.5, doux: 3.8 }, // 02020 · 02022
+    charge: {
+      standard: "Saut explosif, réception amortie",
+      doux: "Sans saut : squat rapide en finissant sur la pointe des pieds",
+    },
+    variante: "Squat au poids du corps si les genoux n’aiment pas les sauts.",
+    conseil: "Réception silencieuse sur l’avant du pied, genoux dans l’axe des pointes, et tu enchaînes directement la descente suivante.",
+  },
 };
 
 /* Catalogue par zone (ordre d'affichage dans le sélecteur) */
@@ -983,6 +1158,7 @@ const ZONES = [
   ["Dos", ["tirage-vertical", "traction-assistee", "rowing", "tirage-horizontal", "rowing-haltere"]],
   ["Bras", ["curl-biceps", "curl-marteau", "curl-poulie", "triceps-poulie", "triceps-poulie-corde"]],
   ["Abdos & gainage", ["planche", "planche-laterale", "dead-bug", "crunch", "releve-genoux", "russian-twist", "mountain-climbers", "extension-lombaire", "superman"]],
+  ["Cardio", ["marche-inclinee", "marche-rapide", "course", "velo", "elliptique", "rameur", "stepper", "corde-a-sauter", "jumping-jacks", "montees-genoux", "burpees", "squat-saute"]],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -1004,6 +1180,7 @@ const MUSCLES_PAR_ZONE = {
   Dos: ["dorsaux", "biceps"],
   Bras: ["biceps"],
   "Abdos & gainage": ["abdos"],
+  Cardio: ["quadriceps", "fessiers", "mollets"],
 };
 
 const MUSCLES_PAR_EXO = {
@@ -1055,6 +1232,18 @@ const MUSCLES_PAR_EXO = {
   "squat-pdc": ["quadriceps", "fessiers"],
   "squat-sumo": ["quadriceps", "fessiers", "adducteurs"],
   "fentes-bulgares": ["quadriceps", "fessiers"],
+  "marche-inclinee": ["fessiers", "ischios", "mollets", "quadriceps"],
+  "marche-rapide": ["quadriceps", "mollets", "fessiers"],
+  course: ["quadriceps", "ischios", "mollets", "fessiers"],
+  velo: ["quadriceps", "fessiers", "mollets"],
+  elliptique: ["quadriceps", "fessiers", "ischios", "epaules"],
+  rameur: ["dorsaux", "quadriceps", "fessiers", "ischios", "biceps", "lombaires"],
+  stepper: ["fessiers", "quadriceps", "mollets"],
+  "corde-a-sauter": ["mollets", "quadriceps", "epaules", "avant-bras"],
+  "jumping-jacks": ["mollets", "quadriceps", "fessiers", "epaules", "abducteurs"],
+  "montees-genoux": ["quadriceps", "abdos", "mollets"],
+  burpees: ["quadriceps", "fessiers", "pectoraux", "triceps", "abdos", "epaules"],
+  "squat-saute": ["quadriceps", "fessiers", "mollets"],
 };
 for (const [id, m] of Object.entries(MUSCLES_PAR_EXO)) {
   if (EXOS[id]) EXOS[id].muscles = m;
@@ -1084,6 +1273,8 @@ const GROUPES = {
   obliques: "Obliques",
   "abdos-flexion": "Abdos (flexion)",
   lombaires: "Bas du dos",
+  "cardio-continu": "Cardio continu",
+  "cardio-fractionne": "Cardio fractionné",
 };
 
 const GROUPE_PAR_EXO = {
@@ -1110,6 +1301,10 @@ const GROUPE_PAR_EXO = {
   "planche-laterale": "obliques", "russian-twist": "obliques",
   crunch: "abdos-flexion", "releve-genoux": "abdos-flexion",
   "extension-lombaire": "lombaires", superman: "lombaires",
+  "marche-inclinee": "cardio-continu", "marche-rapide": "cardio-continu", course: "cardio-continu",
+  velo: "cardio-continu", elliptique: "cardio-continu", rameur: "cardio-continu", stepper: "cardio-continu",
+  "corde-a-sauter": "cardio-fractionne", "jumping-jacks": "cardio-fractionne",
+  "montees-genoux": "cardio-fractionne", burpees: "cardio-fractionne", "squat-saute": "cardio-fractionne",
 };
 for (const [id, g] of Object.entries(GROUPE_PAR_EXO)) {
   if (EXOS[id]) EXOS[id].groupe = g;
@@ -1149,29 +1344,49 @@ function minutesExo(series, repos) {
   return (series * 45 + Math.max(0, series - 1) * (repos || 60)) / 60;
 }
 
+/* MET d'un exercice : la valeur du Compendium quand l'exercice en porte une
+   (cardio), sinon l'estimation par famille de mouvement */
+function metDe(exo, niveau) {
+  if (exo && exo.met) {
+    return typeof exo.met === "number" ? exo.met : exo.met[niveau] || exo.met.standard;
+  }
+  return metPourExo(exo);
+}
+
+/* charge moyenne d'un exercice fait (les séries peuvent différer) */
+function chargeMoyenne(dexo) {
+  const liste = (Array.isArray(dexo.charges) ? dexo.charges : [dexo.charge])
+    .map(parseCharge)
+    .filter((x) => x != null);
+  return liste.length ? liste.reduce((a, b) => a + b, 0) / liste.length : null;
+}
+
 /* kcal d'un exercice fait, à partir des données figées de l'historique */
-function kcalExo(dexo, poidsKg, tabata) {
-  const exo = EXOS[dexo.id];
-  const met = tabata ? MET_TABATA : metPourExo(exo);
+function kcalExo(dexo, poidsKg, { tabata, niveau, dico } = {}) {
+  const exo = (dico && dico[dexo.id]) || EXOS[dexo.id];
+  const met = tabata ? MET_TABATA : metDe(exo, niveau);
   let minutes;
   if (tabata) {
     minutes = (dexo.series * (tabata.travail + tabata.repos)) / 60;
+  } else if (dexo.minutes) {
+    minutes = dexo.minutes; // cardio continu : le temps réellement fait
   } else {
     minutes = minutesExo(dexo.series, exo ? exo.repos : 60);
   }
-  const charge = parseCharge(dexo.charge);
+  const charge = chargeMoyenne(dexo);
   const bonusCharge = charge ? Math.min(0.3, charge / (poidsKg * 2)) : 0;
   return met * poidsKg * (minutes / 60) * (1 + bonusCharge);
 }
 
-/* Total séance : exercices faits + échauffement + cardio/étirements.
-   `detail` vient du snapshot ; `poidsKg` du profil ; `tabata` si applicable. */
-function estimerCaloriesSeance(detail, poidsKg, tabata) {
+/* Total séance : exercices faits + échauffement + étirements, et le cardio
+   générique de fin de séance seulement s'il a été coché.
+   `detail` vient du snapshot ; `poidsKg` du profil. */
+function estimerCaloriesSeance(detail, poidsKg, { tabata = null, niveau = "standard", cardio = false, dico } = {}) {
   if (!poidsKg || !detail) return null;
   let kcal = 0;
-  for (const dexo of detail) kcal += kcalExo(dexo, poidsKg, tabata);
+  for (const dexo of detail) kcal += kcalExo(dexo, poidsKg, { tabata, niveau, dico });
   kcal += 3.5 * poidsKg * (7 / 60); // échauffement ~7 min doux
-  if (!tabata) kcal += 5 * poidsKg * (17 / 60); // cardio ~17 min modéré
+  if (cardio) kcal += 5 * poidsKg * (17 / 60); // cardio ~17 min modéré
   kcal += 2.5 * poidsKg * (5 / 60); // retour au calme ~5 min
   return Math.round(kcal / 5) * 5; // arrondi à 5 kcal, c'est une estimation
 }
@@ -1419,7 +1634,8 @@ function construirePerso(p, dico) {
       tabata: s.tabata || null,
       rounds: s.rounds || {},
       exos: s.exoIds.map((eid) => dico[eid]).filter(Boolean),
-      cardio: s.tabata ? null : CARDIO_GENERIQUE,
+      /* un exercice de cardio continu dans la séance remplace le cardio générique */
+      cardio: s.tabata || s.exoIds.some((eid) => dico[eid] && dico[eid].duree) ? null : CARDIO_GENERIQUE,
     })),
   };
 }
@@ -1491,6 +1707,15 @@ const CONSEILS = [
     ],
   },
   {
+    id: "cardio",
+    icone: HeartPulse,
+    titre: "Le cardio, bien dosé",
+    texte: [
+      "Le repère de l’OMS (2020) pour les adultes : 150 à 300 min d’endurance modérée par semaine, ou 75 à 150 min d’effort soutenu, en plus du renforcement musculaire au moins 2 jours par semaine. Tes séances en couvrent déjà une bonne partie ; la marche des jours off fait le reste.",
+      "Le bon rythme se règle au souffle : en modéré, tu peux parler mais pas chanter ; en soutenu, seulement quelques mots. Chaque exercice cardio de l’app donne des réglages pour ton niveau (pente, watts, cadence), et l’énergie dépensée est estimée avec le Compendium of Physical Activities (2024), la référence scientifique en la matière.",
+    ],
+  },
+  {
     id: "assiette",
     icone: Salad,
     titre: "L’assiette qui aide",
@@ -1534,8 +1759,16 @@ const CONSEILS = [
 
 /* Une séance en cours stocke les étapes cochées et les séries faites.
    (migration : les anciennes données étaient directement la carte des coches) */
+/* chargesSeries : {slotId: {exo, v: [charge de chaque série]}} — saisies du jour
+   durees : {slotId: {exo, v: minutes}} — cardio continu
+   debut / maj : jour de la première action, horodatage de la dernière
+   (sert à valider toute seule une séance oubliée) */
+function seanceVierge() {
+  return { coches: {}, series: {}, remplacements: {}, ajouts: [], ordre: [], chargesSeries: {}, durees: {} };
+}
+
 function normaliserSeance(brut) {
-  if (!brut) return { coches: {}, series: {}, remplacements: {}, ajouts: [], ordre: [] };
+  if (!brut) return seanceVierge();
   if (brut.coches)
     return {
       coches: brut.coches,
@@ -1543,20 +1776,112 @@ function normaliserSeance(brut) {
       remplacements: brut.remplacements || {},
       ajouts: brut.ajouts || [],
       ordre: brut.ordre || [],
+      chargesSeries: brut.chargesSeries || {},
+      durees: brut.durees || {},
+      ...(brut.debut ? { debut: brut.debut, maj: brut.maj || 0 } : {}),
     };
-  return { coches: brut, series: {}, remplacements: {}, ajouts: [], ordre: [] };
+  return { ...seanceVierge(), coches: brut };
 }
 
-/* retire un emplacement (ajout) et nettoie ses coches/séries/remplacement */
+/* retire un emplacement (ajout) et nettoie tout ce qui s'y rattache */
 function retirerSlot(seance, slotId) {
   const sansCle = (o) => { const c = { ...o }; delete c[slotId]; return c; };
   return {
+    ...seance,
     coches: sansCle(seance.coches),
     series: sansCle(seance.series),
     remplacements: sansCle(seance.remplacements),
+    chargesSeries: sansCle(seance.chargesSeries),
+    durees: sansCle(seance.durees),
     ajouts: seance.ajouts.filter((a) => a.slotId !== slotId),
     ordre: seance.ordre.filter((id) => id !== slotId),
   };
+}
+
+/* Séance réellement commencée (et pas juste ouverte pour regarder) :
+   une étape cochée, une série faite, une charge ou une durée notée */
+function seanceDemarree(et) {
+  return (
+    Object.values(et.coches).some((v) => v === true) ||
+    Object.values(et.series).some((n) => n > 0) ||
+    Object.values(et.chargesSeries).some((c) => c && Array.isArray(c.v) && c.v.some((x) => x != null)) ||
+    Object.keys(et.durees).length > 0
+  );
+}
+
+/* Oubli de validation : commencée un jour passé, et plus touchée depuis
+   3 h (une séance à cheval sur minuit n'est pas coupée en deux) */
+const DELAI_OUBLI = 3 * 3600 * 1000;
+function seanceOubliee(et, auj, maintenant) {
+  return !!et.debut && et.debut < auj && maintenant - (et.maj || 0) > DELAI_OUBLI && seanceDemarree(et);
+}
+
+/* Programmes supprimés : gardés 3 jours, restaurables, puis effacés */
+const DUREE_CORBEILLE = 3 * 24 * 3600 * 1000;
+function purgerCorbeille(liste, maintenant = Date.now()) {
+  return (Array.isArray(liste) ? liste : []).filter(
+    (e) => e && e.prog && maintenant - e.supprimeLe < DUREE_CORBEILLE
+  );
+}
+
+/* dernière performance enregistrée par exercice (séance validée la plus récente) */
+function dernieresPerfsDe(historique) {
+  const m = {};
+  for (let i = historique.length - 1; i >= 0; i--) {
+    const h = historique[i];
+    if (!h.detail) continue;
+    for (const dexo of h.detail) {
+      if (!m[dexo.id]) m[dexo.id] = { ...dexo, d: h.d };
+    }
+  }
+  return m;
+}
+
+/* Charges affichées sur n séries : celle saisie aujourd'hui pour la série,
+   sinon celle de la même série la dernière fois, sinon la charge notée sur
+   l'exercice. Une charge changée à la main se reporte sur les séries
+   suivantes qui n'ont pas la leur. */
+function chargesDeSerie(n, entree, exoId, perf, chargeGlobale) {
+  const saisies = entree && entree.exo === exoId && Array.isArray(entree.v) ? entree.v : [];
+  const avant = perf
+    ? Array.isArray(perf.charges) && perf.charges.length
+      ? perf.charges.map((c) => c || "")
+      : perf.charge
+      ? [perf.charge]
+      : []
+    : [];
+  const out = [];
+  let report = null;
+  for (let i = 0; i < n; i++) {
+    const parDefaut =
+      report != null ? report : avant.length ? avant[Math.min(i, avant.length - 1)] : chargeGlobale || "";
+    if (saisies[i] != null) {
+      out.push(saisies[i]);
+      if (saisies[i] !== parDefaut) report = saisies[i];
+    } else {
+      out.push(parDefaut);
+    }
+  }
+  return out;
+}
+
+function formatKg(n) {
+  return String(Math.round(n * 10) / 10).replace(".", ",");
+}
+
+/* « 50 kg », ou « 50 / 52,5 / 55 kg » quand les séries diffèrent */
+function texteCharges(dexo) {
+  const liste = Array.isArray(dexo.charges) ? dexo.charges.filter(Boolean) : [];
+  if (liste.length > 1 && new Set(liste).size > 1) return `${liste.join(" / ")} kg`;
+  const c = liste[0] || dexo.charge;
+  return c ? `${c} kg` : "";
+}
+
+/* résumé d'un exercice fait : « 3 × 12 · 50 kg » ou « 25 min » */
+function texteDetail(dexo) {
+  if (dexo.minutes) return `${dexo.minutes} min`;
+  const ch = texteCharges(dexo);
+  return `${dexo.series} × ${dexo.reps}${ch ? ` · ${ch}` : ""}`;
 }
 
 /* ordre d'affichage des emplacements : l'ordre choisi pour la séance du jour
@@ -1571,9 +1896,106 @@ function ordonnerSlots(slots, ordre) {
   });
 }
 
+/* emplacements d'une séance = exercices du programme + ajouts du jour,
+   dans l'ordre choisi pour la séance */
+function slotsDe(seance, et, dico) {
+  return ordonnerSlots(
+    [
+      ...seance.exos.map((e) => ({ slotId: e.id, base: e, rounds: (seance.rounds && seance.rounds[e.id]) || 8, ajout: false })),
+      ...et.ajouts
+        .map((a) => ({ slotId: a.slotId, base: dico[a.exoId], rounds: a.rounds || 8, ajout: true }))
+        .filter((s) => s.base),
+    ],
+    et.ordre
+  );
+}
+
+function exoDuSlot(s, et, dico) {
+  return (et.remplacements[s.slotId] && dico[et.remplacements[s.slotId]]) || s.base;
+}
+
+/* Instantané d'une séance à la validation : ce qui a vraiment été fait
+   (variantes comprises), séries, charges de chaque série ou durée, et
+   l'énergie dépensée estimée. Un exercice commencé compte, même incomplet. */
+function instantaneSeance(seance, et, donnees, dico, niveau) {
+  const perfs = dernieresPerfsDe(donnees.historique);
+  const detail = [];
+  for (const s of slotsDe(seance, et, dico)) {
+    const exo = exoDuSlot(s, et, dico);
+    if (!exo) continue;
+    const coche = !!et.coches[s.slotId];
+    const base = { id: exo.id, nom: exo.nom };
+
+    if (seance.tabata) {
+      if (!coche && !(et.series[s.slotId] > 0)) continue;
+      detail.push({
+        ...base,
+        series: s.rounds,
+        reps: `rounds tabata ${seance.tabata.travail}/${seance.tabata.repos}`,
+        charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
+      });
+      continue;
+    }
+
+    if (exo.duree) {
+      const d = et.durees[s.slotId];
+      const saisie = d && d.exo === exo.id ? d.v : null;
+      if (!coche && saisie == null) continue;
+      const minutes = saisie != null ? saisie : (perfs[exo.id] && perfs[exo.id].minutes) || exo.duree;
+      detail.push({ ...base, series: 1, reps: `${minutes} min`, minutes, charge: null });
+      continue;
+    }
+
+    const entree = et.chargesSeries[s.slotId];
+    const nbSaisies = entree && entree.exo === exo.id ? entree.v.filter((x) => x != null && x !== "").length : 0;
+    let n = et.series[s.slotId] || 0;
+    if (!n && coche) n = exo.series;
+    if (!n && !exo.sansCharge) n = nbSaisies;
+    if (!n) continue;
+    if (exo.sansCharge) {
+      detail.push({ ...base, series: n, reps: exo.reps, charge: null });
+      continue;
+    }
+    const charges = chargesDeSerie(n, entree, exo.id, perfs[exo.id], donnees.charges[exo.id]).map((c) => c || null);
+    const valeurs = charges.map(parseCharge).filter((x) => x != null);
+    detail.push({
+      ...base,
+      series: n,
+      reps: exo.reps,
+      /* la plus lourde de la séance : c'est elle que suit la courbe de progrès */
+      charge: valeurs.length ? formatKg(Math.max(...valeurs)) : null,
+      charges,
+    });
+  }
+  const kcal = estimerCaloriesSeance(detail, parseCharge(donnees.mesures.poids), {
+    tabata: seance.tabata || null,
+    niveau,
+    cardio: !!seance.cardio && !!et.coches.cardio,
+    dico,
+  });
+  return { detail, kcal };
+}
+
+/* À la validation, la charge notée sur chaque exercice devient celle de sa
+   dernière série : c'est le point de départ affiché tant qu'il n'y a pas
+   d'historique pour cet exercice (et la charge des séances tabata). */
+function chargesApres(charges, detail) {
+  let maj = charges;
+  for (const dexo of detail) {
+    const derniere = Array.isArray(dexo.charges) ? [...dexo.charges].reverse().find(Boolean) : null;
+    if (derniere && maj[dexo.id] !== derniere) maj = { ...maj, [dexo.id]: derniere };
+  }
+  return maj;
+}
+
 async function chargerTout() {
   const persos = (await lire("app:programmesPerso")) || [];
   const exosPerso = (await lire("app:exosPerso")) || [];
+  const brutCorbeille = await lire("app:corbeille");
+  const corbeille = purgerCorbeille(brutCorbeille);
+  if (Array.isArray(brutCorbeille) && corbeille.length !== brutCorbeille.length) {
+    ecrire("app:corbeille", corbeille); // plus de 3 jours : effacés pour de bon
+  }
   const brutProfils = await lire("app:profils");
   /* le duo d'origine garde ses profils ; tout autre espace démarre vierge */
   const origine = !espaceApp || espaceApp.id === "principal";
@@ -1583,7 +2005,9 @@ async function chargerTout() {
       : origine
       ? PROFILS_DEFAUT
       : PROFILS_NEUFS;
-  const ids = idsSeancesDe(persos);
+  /* les séances des programmes en corbeille aussi : une restauration
+     les retrouve telles qu'elles étaient */
+  const ids = idsSeancesDe([...persos, ...corbeille.map((e) => e.prog)]);
   const res = {};
   for (const p of profils.map((x) => x.id)) {
     const seances = {};
@@ -1606,7 +2030,7 @@ async function chargerTout() {
       mesures: { ...(MESURES_DEFAUT[p] || {}), ...(mesures || {}) },
     };
   }
-  return { persos, exosPerso, profils, res };
+  return { persos, exosPerso, corbeille, profils, res };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1861,15 +2285,22 @@ export default function App() {
   const [listeEspaces, setListeEspaces] = useState(false); // panneau caché (triple tap)
   const [codePartage, setCodePartage] = useState(null); // {code, nom, nbExos}
   const [importOuvert, setImportOuvert] = useState(false);
+  const [corbeille, setCorbeille] = useState([]); // programmes supprimés (3 jours)
+  const [corbeilleOuverte, setCorbeilleOuverte] = useState(false);
+  const [toast, setToast] = useState(null); // {message, action?: {libelle, fn}, duree?}
+  const [verifOubli, setVerifOubli] = useState(0); // déclenche la recherche de séances oubliées
   const vivantRef = useRef(true);
+  /* dernier état connu, pour les actions différées (bouton « Annuler » d'un toast) */
+  const etatRef = useRef({});
 
   async function afficherDonnees() {
-    const { persos, exosPerso: ep, profils: pf, res } = await chargerTout();
+    const { persos, exosPerso: ep, corbeille: cb, profils: pf, res } = await chargerTout();
     let pSauve = await lire("app:profil");
     if (pSauve === "maman") pSauve = "valerie";
     if (!vivantRef.current) return;
     setProgrammesPerso(persos);
     setExosPerso(ep);
+    setCorbeille(cb);
     setProfils(pf);
     setStore(res);
     setProfil(pf.some((x) => x.id === pSauve) ? pSauve : pf[0].id);
@@ -1899,6 +2330,10 @@ export default function App() {
       /* espace adopté automatiquement (migration) : on le retient aussi */
       if (espaceApp) await memoriserEspace(espaceApp, codeApp || "");
       await afficherDonnees();
+      /* séances oubliées : seulement sur des données fraîches (synchro à jour,
+         ou appareil seul) — sinon un téléphone hors ligne validerait une
+         séance que l'autre a déjà validée */
+      if (statut === "ok" || statut === "maj" || !espaceApp) setVerifOubli((n) => n + 1);
     })();
     return () => { vivantRef.current = false; };
   }, []);
@@ -1953,6 +2388,7 @@ export default function App() {
     setSyncEtat("ok");
     setVerrou(null);
     await afficherDonnees();
+    setVerifOubli((n) => n + 1);
   }
 
   /* ---- partage d'un programme d'un espace à l'autre (copie par code) ---- */
@@ -2097,11 +2533,15 @@ export default function App() {
       try {
         const statut = await tirerDepuisServeur();
         if (statut === "maj") {
-          const { persos, exosPerso: ep, profils: pf, res } = await chargerTout();
+          const { persos, exosPerso: ep, corbeille: cb, profils: pf, res } = await chargerTout();
           setProgrammesPerso(persos);
           setExosPerso(ep);
+          setCorbeille(cb);
           setProfils(pf);
           setStore(res);
+        }
+        if (statut === "maj" || statut === "ok") {
+          setVerifOubli((n) => n + 1);
         } else if (statut === "code") {
           /* le code a été changé côté serveur : on reverrouille */
           codeApp = null;
@@ -2115,6 +2555,17 @@ export default function App() {
     document.addEventListener("visibilitychange", vis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [syncEtat]);
+
+  /* ---- appareil seul (pas d'espace) : on guette aussi le changement de
+     jour, l'app pouvant rester ouverte en arrière-plan toute la nuit ---- */
+  useEffect(() => {
+    if (chargement || syncEtat === "ok" || espace) return;
+    const verifier = () => setVerifOubli((n) => n + 1);
+    const t = setInterval(verifier, 5 * 60 * 1000);
+    const vis = () => { if (document.visibilityState === "visible") verifier(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
+  }, [chargement, syncEtat, espace]);
 
   /* ---- enregistrement du service worker (notifications + hors-ligne) ---- */
   useEffect(() => {
@@ -2287,109 +2738,134 @@ export default function App() {
     document.body.dataset.accent = accentActif;
   }, [accentActif]);
 
-  function basculerEtape(sid, eid) {
+  /* Toute modification d'une séance passe par ici. `activite` : l'action
+     prouve que la séance a vraiment commencé (coche, série, charge, durée) —
+     on date alors la séance, pour pouvoir la valider si elle est oubliée. */
+  function modifierSeance(sid, transformer, activite = false) {
     setStore((prev) => {
       const p = prev[profil];
+      if (!p) return prev;
       const seance = normaliserSeance(p.seances[sid]);
-      const maj = { ...seance, coches: { ...seance.coches, [eid]: !seance.coches[eid] } };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
-    });
-  }
-
-  /* n séries faites sur un emplacement d'exercice ; il se coche tout seul
-     quand toutes les séries prévues sont faites */
-  function noterSeries(sid, slotId, cible, n) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
-      const maj = {
-        ...seance,
-        coches: { ...seance.coches, [slotId]: n >= cible },
-        series: { ...seance.series, [slotId]: n },
-      };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
-    });
-  }
-
-  /* remplace l'exercice d'un emplacement par une variante (humeur du jour,
-     machine prise…) ; revient au programme d'origine à la validation */
-  function remplacerExo(sid, slotId, nouvelId) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
-      const remplacements = { ...seance.remplacements };
-      if (nouvelId === slotId) delete remplacements[slotId];
-      else remplacements[slotId] = nouvelId;
-      const maj = { ...seance, remplacements };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
-    });
-  }
-
-  /* ajout / retrait d'un exercice sur la séance en cours (ne touche pas au
-     programme) : toggle par exercice depuis le sélecteur */
-  function basculerAjout(sid, exoId) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
-      const existant = seance.ajouts.find((a) => a.exoId === exoId && !seance.remplacements[a.slotId]);
-      let maj;
-      if (existant) {
-        maj = retirerSlot(seance, existant.slotId);
-      } else {
-        const slotId = `ajout-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        maj = { ...seance, ajouts: [...seance.ajouts, { slotId, exoId, rounds: 8 }] };
+      let maj = transformer(seance);
+      if (!maj || maj === seance) return prev;
+      if (activite) {
+        maj = {
+          ...maj,
+          debut: seanceDemarree(seance) && seance.debut ? seance.debut : cleJour(),
+          maj: Date.now(),
+        };
       }
       ecrire(`${profil}:seance:${sid}`, maj);
       return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
     });
   }
 
-  function retirerAjout(sid, slotId) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const maj = retirerSlot(normaliserSeance(p.seances[sid]), slotId);
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+  function basculerEtape(sid, eid) {
+    modifierSeance(sid, (s) => ({ ...s, coches: { ...s.coches, [eid]: !s.coches[eid] } }), true);
+  }
+
+  /* n séries faites sur un emplacement d'exercice ; il se coche tout seul
+     quand toutes les séries prévues sont faites. `figer` : les charges
+     affichées des séries faites sont retenues telles quelles. */
+  function noterSeries(sid, slotId, cible, n, figer = null) {
+    modifierSeance(
+      sid,
+      (s) => {
+        let chargesSeries = s.chargesSeries;
+        if (figer && n > 0) {
+          const ent = chargesSeries[slotId];
+          const v = ent && ent.exo === figer.exo ? [...ent.v] : [];
+          for (let i = 0; i < n; i++) {
+            if (v[i] == null && figer.valeurs[i]) v[i] = figer.valeurs[i];
+          }
+          chargesSeries = { ...chargesSeries, [slotId]: { exo: figer.exo, v } };
+        }
+        return {
+          ...s,
+          coches: { ...s.coches, [slotId]: n >= cible },
+          series: { ...s.series, [slotId]: n },
+          chargesSeries,
+        };
+      },
+      true
+    );
+  }
+
+  /* charge d'une série précise (pyramide, série plus légère en fin…) */
+  function noterChargeSerie(sid, slotId, exoId, index, valeur) {
+    modifierSeance(
+      sid,
+      (s) => {
+        const ent = s.chargesSeries[slotId];
+        const v = ent && ent.exo === exoId ? [...ent.v] : [];
+        while (v.length < index) v.push(null);
+        v[index] = valeur;
+        return { ...s, chargesSeries: { ...s.chargesSeries, [slotId]: { exo: exoId, v } } };
+      },
+      true
+    );
+  }
+
+  /* cardio continu : minutes faites (l'exercice est alors coché) */
+  function noterDuree(sid, slotId, exoId, minutes) {
+    modifierSeance(
+      sid,
+      (s) => ({
+        ...s,
+        coches: { ...s.coches, [slotId]: true },
+        durees: { ...s.durees, [slotId]: { exo: exoId, v: minutes } },
+      }),
+      true
+    );
+  }
+
+  /* remplace l'exercice d'un emplacement par une variante (humeur du jour,
+     machine prise…) ; revient au programme d'origine à la validation */
+  function remplacerExo(sid, slotId, nouvelId) {
+    modifierSeance(sid, (s) => {
+      const remplacements = { ...s.remplacements };
+      if (nouvelId === slotId) delete remplacements[slotId];
+      else remplacements[slotId] = nouvelId;
+      return { ...s, remplacements };
     });
+  }
+
+  /* ajout / retrait d'un exercice sur la séance en cours (ne touche pas au
+     programme) : toggle par exercice depuis le sélecteur */
+  function basculerAjout(sid, exoId) {
+    modifierSeance(sid, (s) => {
+      const existant = s.ajouts.find((a) => a.exoId === exoId && !s.remplacements[a.slotId]);
+      if (existant) return retirerSlot(s, existant.slotId);
+      const slotId = `ajout-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      return { ...s, ajouts: [...s.ajouts, { slotId, exoId, rounds: 8 }] };
+    });
+  }
+
+  function retirerAjout(sid, slotId) {
+    modifierSeance(sid, (s) => retirerSlot(s, slotId));
   }
 
   /* réordonne un exercice dans la séance du jour (le programme reste intact) */
   function deplacerSlot(sid, slotIds, slotId, dir) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
+    modifierSeance(sid, (s) => {
       const liste = [...slotIds];
       const i = liste.indexOf(slotId);
       const j = i + dir;
-      if (i === -1 || j < 0 || j >= liste.length) return prev;
+      if (i === -1 || j < 0 || j >= liste.length) return s;
       [liste[i], liste[j]] = [liste[j], liste[i]];
-      const maj = { ...seance, ordre: liste };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
+      return { ...s, ordre: liste };
     });
   }
 
   function reinitialiserOrdre(sid) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
-      const maj = { ...seance, ordre: [] };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
-    });
+    modifierSeance(sid, (s) => ({ ...s, ordre: [] }));
   }
 
   function noterRoundsAjout(sid, slotId, rounds) {
-    setStore((prev) => {
-      const p = prev[profil];
-      const seance = normaliserSeance(p.seances[sid]);
-      const maj = { ...seance, ajouts: seance.ajouts.map((a) => (a.slotId === slotId ? { ...a, rounds } : a)) };
-      ecrire(`${profil}:seance:${sid}`, maj);
-      return { ...prev, [profil]: { ...p, seances: { ...p.seances, [sid]: maj } } };
-    });
+    modifierSeance(sid, (s) => ({
+      ...s,
+      ajouts: s.ajouts.map((a) => (a.slotId === slotId ? { ...a, rounds } : a)),
+    }));
   }
 
   function noterCharge(exoId, valeur) {
@@ -2428,52 +2904,94 @@ export default function App() {
 
   function terminerSeance(seance) {
     const auj = cleJour();
-    /* instantané de la séance : exercices réellement faits (programme + ajouts),
-       séries et charges du jour */
+    /* instantané : exercices réellement faits (programme + ajouts), séries,
+       charges de chaque série, durées */
     const etatSeance = normaliserSeance(donnees.seances[seance.id]);
-    const slots = ordonnerSlots(
-      [
-        ...seance.exos.map((e) => ({ slotId: e.id, base: e, rounds: (seance.rounds && seance.rounds[e.id]) || 8 })),
-        ...etatSeance.ajouts.map((a) => ({ slotId: a.slotId, base: dicoExos[a.exoId], rounds: a.rounds || 8, ajout: true })),
-      ],
-      etatSeance.ordre
-    );
-    const detail = slots
-      .filter((s) => s.base && etatSeance.coches[s.slotId])
-      .map((s) => {
-        const exo = (etatSeance.remplacements[s.slotId] && dicoExos[etatSeance.remplacements[s.slotId]]) || s.base;
-        if (seance.tabata) {
-          return {
-            id: exo.id,
-            nom: exo.nom,
-            series: s.rounds,
-            reps: `rounds tabata ${seance.tabata.travail}/${seance.tabata.repos}`,
-            charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
-          };
-        }
-        return {
-          id: exo.id,
-          nom: exo.nom,
-          series: etatSeance.series[s.slotId] || exo.series,
-          reps: exo.reps,
-          charge: exo.sansCharge ? null : donnees.charges[exo.id] || null,
-        };
-      });
-    const poidsKg = parseCharge(donnees.mesures.poids);
-    const kcal = estimerCaloriesSeance(detail, poidsKg, seance.tabata || null);
+    const { detail, kcal } = instantaneSeance(seance, etatSeance, donnees, dicoExos, niveauActif);
     /* chaque validation est enregistrée — y compris la même séance refaite
        dans la semaine (ça arrive, et ça compte) */
     const repeat = donnees.historique.some((h) => h.s === seance.id && lundiDe(h.d) === lundiDe(auj));
     const historique = [...donnees.historique, { s: seance.id, d: auj, titre: seance.titre, detail, kcal }];
-    const vierge = { coches: {}, series: {}, remplacements: {}, ajouts: [], ordre: [] };
+    const vierge = seanceVierge();
     setStore((prev) => {
       const p = prev[profil];
+      const chargesMaj = chargesApres(p.charges, detail);
       ecrire(`${profil}:assiduite`, { historique });
       ecrire(`${profil}:seance:${seance.id}`, vierge);
-      return { ...prev, [profil]: { ...p, historique, seances: { ...p.seances, [seance.id]: vierge } } };
+      if (chargesMaj !== p.charges) ecrire(`${profil}:charges`, chargesMaj);
+      return {
+        ...prev,
+        [profil]: { ...p, historique, charges: chargesMaj, seances: { ...p.seances, [seance.id]: vierge } },
+      };
     });
     setOuverte(null);
     setFete({ titre: seance.titre, repeat, total: historique.length, kcal });
+  }
+
+  /* Séances commencées puis oubliées (pas validées avant la fin de la
+     journée) : on les valide à la date où elles ont été faites. Une séance
+     ouverte juste pour regarder ne compte pas — il faut une coche, une
+     série, une charge ou une durée notée. */
+  function autoValiderOublis() {
+    const auj = cleJour();
+    const maintenant = Date.now();
+    const aValider = [];
+    for (const prof of profils) {
+      const d = store[prof.id];
+      if (!d) continue;
+      for (const [sid, brut] of Object.entries(d.seances)) {
+        const et = normaliserSeance(brut);
+        if (!seanceOubliee(et, auj, maintenant)) continue;
+        const def = toutesSeances.find((s) => s.id === sid);
+        if (def) aValider.push({ prof, sid, def, debut: et.debut });
+      }
+    }
+    if (!aValider.length) return;
+
+    setStore((prev) => {
+      let suivant = prev;
+      for (const v of aValider) {
+        const d = suivant[v.prof.id];
+        if (!d) continue;
+        const et = normaliserSeance(d.seances[v.sid]);
+        if (!seanceOubliee(et, auj, maintenant)) continue; // traitée entre-temps
+        const { detail, kcal } = instantaneSeance(v.def, et, d, dicoExos, v.prof.niveau || "standard");
+        const historique = [
+          ...d.historique,
+          { s: v.sid, d: et.debut, titre: v.def.titre, detail, kcal, auto: true },
+        ];
+        const vierge = seanceVierge();
+        const chargesMaj = chargesApres(d.charges, detail);
+        ecrire(`${v.prof.id}:assiduite`, { historique });
+        ecrire(`${v.prof.id}:seance:${v.sid}`, vierge);
+        if (chargesMaj !== d.charges) ecrire(`${v.prof.id}:charges`, chargesMaj);
+        suivant = {
+          ...suivant,
+          [v.prof.id]: { ...d, historique, charges: chargesMaj, seances: { ...d.seances, [v.sid]: vierge } },
+        };
+      }
+      return suivant;
+    });
+    if (aValider.some((v) => v.prof.id === profil && v.sid === ouverte)) setOuverte(null);
+
+    const premier = aValider[0];
+    const qui = premier.prof.id !== profil ? ` (${nomAffiche(store[premier.prof.id], premier.prof)})` : "";
+    setToast({
+      message:
+        aValider.length === 1
+          ? `Séance oubliée, validée pour toi : ${premier.def.titre}${qui}, ${FORMAT_JOUR.format(depuisCle(premier.debut))}.`
+          : `${aValider.length} séances oubliées ont été validées automatiquement, à leur date.`,
+      action: {
+        libelle: "Voir",
+        fn: () => {
+          setEdition(null);
+          setOuverte(null);
+          setOnglet("historique");
+          if (premier.prof.id !== etatRef.current.profil) choisirProfil(premier.prof.id);
+        },
+      },
+      duree: 10000,
+    });
   }
 
   /* Valide une séance écourtée en gardant la version faite comme programme */
@@ -2527,12 +3045,45 @@ export default function App() {
     setEdition(null);
   }
 
+  /* Suppression = mise à la corbeille : le programme reste restaurable
+     3 jours (avec ses séances en cours), puis s'efface tout seul */
   function supprimerProgramme(id) {
+    const prog = programmesPerso.find((p) => p.id === id);
+    if (!prog) return;
     const liste = programmesPerso.filter((p) => p.id !== id);
     setProgrammesPerso(liste);
     ecrire("app:programmesPerso", liste);
+    const corb = [
+      { prog, supprimeLe: Date.now(), actif: donnees.mode === id },
+      ...purgerCorbeille(corbeille).filter((e) => e.prog.id !== id),
+    ];
+    setCorbeille(corb);
+    ecrire("app:corbeille", corb);
     if (donnees.mode === id) choisirMode("fullbody");
     setEdition(null);
+    setToast({
+      message: `« ${prog.nom} » est dans la corbeille pour 3 jours.`,
+      action: { libelle: "Annuler", fn: () => restaurerProgramme(id) },
+      duree: 8000,
+    });
+  }
+
+  /* lit l'état le plus récent : peut être appelée depuis un toast affiché
+     plusieurs secondes après la suppression */
+  function restaurerProgramme(id) {
+    const { corbeille: corb, programmesPerso: progs } = etatRef.current;
+    const entree = corb.find((e) => e.prog.id === id);
+    if (!entree) return;
+    const reste = corb.filter((e) => e.prog.id !== id);
+    setCorbeille(reste);
+    ecrire("app:corbeille", reste);
+    if (!progs.some((p) => p.id === id)) {
+      const liste = [...progs, entree.prog];
+      setProgrammesPerso(liste);
+      ecrire("app:programmesPerso", liste);
+    }
+    if (entree.actif) choisirMode(id);
+    setToast({ message: `« ${entree.prog.nom} » est de retour.`, duree: 4000 });
   }
 
   /* ---- statistiques d’assiduité ---- */
@@ -2559,6 +3110,14 @@ export default function App() {
     return { total: donnees.historique.length, cetteSemaine, nCetteSemaine, serie, barres };
   }, [store, profil]);
 
+  etatRef.current = { corbeille, programmesPerso, profil };
+
+  /* recherche des séances oubliées, une fois l'état à jour rendu */
+  useEffect(() => {
+    if (chargement || verrou || !verifOubli) return;
+    autoValiderOublis();
+  }, [verifOubli, chargement]);
+
   /* ---- écran de verrouillage ---- */
   if (verrou) {
     return (
@@ -2583,6 +3142,14 @@ export default function App() {
   }
 
   const seanceOuverte = toutesSeances.find((s) => s.id === ouverte) || null;
+  /* tous les exercices du programme de la séance ouverte (toutes séances
+     confondues) : les variantes proposées n'en reprennent aucun */
+  const progOuvert = seanceOuverte
+    ? programmes.find((p) => p.seances.some((s) => s.id === seanceOuverte.id))
+    : null;
+  const idsProgrammeOuvert = new Set(
+    progOuvert ? progOuvert.seances.flatMap((s) => s.exos.map((e) => e.id)) : []
+  );
 
   return (
     <div ref={defileur} data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta">
@@ -2685,9 +3252,12 @@ export default function App() {
             dico={dicoExos}
             tousExos={tousExos}
             faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
+            idsProgramme={idsProgrammeOuvert}
             surRetour={() => setOuverte(null)}
             surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
-            surSeries={(slotId, cible, n) => noterSeries(seanceOuverte.id, slotId, cible, n)}
+            surSeries={(slotId, cible, n, figer) => noterSeries(seanceOuverte.id, slotId, cible, n, figer)}
+            surChargeSerie={(slotId, exoId, i, v) => noterChargeSerie(seanceOuverte.id, slotId, exoId, i, v)}
+            surDuree={(slotId, exoId, minutes) => noterDuree(seanceOuverte.id, slotId, exoId, minutes)}
             surRemplacer={(slotId, nouvelId) => remplacerExo(seanceOuverte.id, slotId, nouvelId)}
             surCharge={noterCharge}
             surRepos={lancerRepos}
@@ -2740,6 +3310,8 @@ export default function App() {
                 surDefinirCode={definirCodeEspace}
                 surPartager={async (id) => setCodePartage(await partagerProgramme(id))}
                 surImporter={() => setImportOuvert(true)}
+                corbeille={corbeille}
+                surCorbeille={() => setCorbeilleOuverte(true)}
                 surCreer={() => setEdition({ nouveau: true })}
                 surEditer={(id) => setEdition({ id })}
               />
@@ -2833,6 +3405,16 @@ export default function App() {
         <FeuilleImport surImporter={importerProgramme} surFermer={() => setImportOuvert(false)} />
       )}
 
+      {corbeilleOuverte && (
+        <FeuilleCorbeille
+          entrees={purgerCorbeille(corbeille)}
+          surRestaurer={restaurerProgramme}
+          surFermer={() => setCorbeilleOuverte(false)}
+        />
+      )}
+
+      {toast && <Toast toast={toast} surFermer={() => setToast(null)} />}
+
       {listeEspaces && (
         <FeuilleEspaces
           espaces={espacesConnus}
@@ -2884,6 +3466,103 @@ export default function App() {
 /* ------------------------------------------------------------------ */
 /* Vue « Ma semaine »                                                  */
 /* ------------------------------------------------------------------ */
+
+/* Petit message en haut de l'écran, avec une action éventuelle (Annuler, Voir) */
+function Toast({ toast, surFermer }) {
+  useEffect(() => {
+    const t = setTimeout(surFermer, toast.duree || 6000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
+  return createPortal(
+    <div className="fixed left-4 right-4 z-50 mx-auto max-w-md toast-haut font-jakarta text-encre surgit" role="status">
+      <div className="rounded-2xl bg-carte2 border border-ligne p-2 pl-4 flex items-center gap-2 ombre-toast">
+        <p className="flex-1 min-w-0 text-sm leading-snug text-douce py-1.5">{toast.message}</p>
+        {toast.action && (
+          <button
+            onClick={() => { toast.action.fn(); surFermer(); }}
+            className="h-10 px-3.5 rounded-xl bg-accent text-accent-ink text-sm font-extrabold shrink-0 active:scale-95 transi"
+          >
+            {toast.action.libelle}
+          </button>
+        )}
+        <button
+          onClick={surFermer}
+          aria-label="Fermer le message"
+          className="h-10 w-9 rounded-xl flex items-center justify-center shrink-0 active:scale-95 transi"
+        >
+          <X size={16} className="text-brume" />
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function delaiRestant(ms) {
+  const h = Math.max(1, Math.ceil(ms / 3600000));
+  return h >= 24 ? `dans ${Math.ceil(h / 24)} j` : `dans ${h} h`;
+}
+
+/* Corbeille : programmes supprimés depuis moins de 3 jours */
+function FeuilleCorbeille({ entrees, surRestaurer, surFermer }) {
+  useVerrouScroll();
+  const maintenant = Date.now();
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
+      <div
+        className="w-full mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <span className="h-11 w-11 rounded-2xl bg-accent-soft flex items-center justify-center shrink-0 transi">
+            <Trash2 size={19} className="text-accent transi" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base leading-tight">Corbeille</h3>
+            <p className="text-brume text-xs mt-0.5">Vidée automatiquement au bout de 3 jours</p>
+          </div>
+          <button
+            onClick={surFermer}
+            aria-label="Fermer"
+            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
+          >
+            <X size={18} className="text-brume" />
+          </button>
+        </div>
+
+        {entrees.length === 0 ? (
+          <p className="text-brume text-sm py-3 leading-relaxed">
+            La corbeille est vide.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto defile">
+            {entrees.map((e) => {
+              const n = e.prog.seances.length;
+              return (
+                <div key={e.prog.id} className="rounded-2xl bg-carte2 border border-ligne p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{e.prog.nom}</p>
+                    <p className="text-brume text-xs mt-0.5">
+                      {n} séance{n > 1 ? "s" : ""} · effacé {delaiRestant(e.supprimeLe + DUREE_CORBEILLE - maintenant)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => surRestaurer(e.prog.id)}
+                    className="h-11 px-3 rounded-xl bg-accent text-accent-ink text-sm font-extrabold flex items-center gap-1.5 shrink-0 active:scale-95 transi"
+                  >
+                    <RotateCcw size={15} strokeWidth={2.5} /> Restaurer
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 /* Code de partage d'un programme : à transmettre à qui on veut */
 function FeuilleCodePartage({ resultat, surFermer }) {
@@ -3244,9 +3923,10 @@ function CarteProtection({ surDefinirCode }) {
 function VueSemaine({
   profil, profilObj, profils, stats, donnees, programmes, progActuel, syncEtat, espace,
   surOuvrir, surMode, surMesure, surMajProfil, surSupprimerProfil, surDefinirCode,
-  surPartager, surImporter,
+  surPartager, surImporter, corbeille = [], surCorbeille,
   surCreer, surEditer,
 }) {
+  const nbCorbeille = purgerCorbeille(corbeille).length;
   const p = profilObj;
   const nom = nomAffiche(donnees, p);
   const dateFr = FORMAT_JOUR.format(new Date());
@@ -3370,6 +4050,15 @@ function VueSemaine({
               </button>
             )}
           </div>
+          {nbCorbeille > 0 && (
+            <button
+              onClick={surCorbeille}
+              className="w-full h-11 rounded-2xl bg-carte border border-ligne text-brume text-xs font-bold flex items-center justify-center gap-2 active:scale-98 transi"
+            >
+              <Trash2 size={14} />
+              Corbeille · {nbCorbeille} programme{nbCorbeille > 1 ? "s" : ""} récupérable{nbCorbeille > 1 ? "s" : ""}
+            </button>
+          )}
         </div>
         <p className="text-brume text-xs mt-2 leading-relaxed">{progActuel.description}</p>
       </section>
@@ -3382,9 +4071,7 @@ function VueSemaine({
         <div className="space-y-3">
           {progActuel.seances.map((s) => {
             const faite = stats.cetteSemaine.has(s.id);
-            const etatSeance = donnees.seances[s.id] || {};
-            const nChecks = Object.values(etatSeance.coches || etatSeance).filter((v) => v === true).length;
-            const enCours = !faite && nChecks > 0;
+            const enCours = !faite && seanceDemarree(normaliserSeance(donnees.seances[s.id]));
             return (
               <button
                 key={s.id}
@@ -3419,8 +4106,9 @@ function VueSemaine({
         </div>
         <p className="text-brume text-xs mt-3 leading-relaxed">
           L’ordre est libre, avec au moins un jour de repos entre deux séances.
-          Chaque séance dure 45 à 60 min. Séance validée par erreur ? Ouvre-la pour l’annuler,
-          ou passe par l’onglet Historique.
+          Chaque séance dure 45 à 60 min. Oublié de valider ? Une séance commencée se valide
+          toute seule à sa date, le lendemain. Validée par erreur ? Ouvre-la pour l’annuler, ou
+          passe par l’onglet Historique.
         </p>
       </section>
 
@@ -3687,8 +4375,8 @@ function VueProgres({ profil, historique, dico }) {
   return (
     <div key={profil} className="vue space-y-4">
       <p className="text-sm text-brume leading-relaxed">
-        L’évolution de tes charges, exercice par exercice. C’est <strong className="text-douce">ça</strong>,
-        la vraie preuve que ça marche.
+        L’évolution de tes charges, exercice par exercice (la série la plus lourde de chaque
+        séance). C’est <strong className="text-douce">ça</strong>, la vraie preuve que ça marche.
       </p>
 
       {/* roulette de sélection, triée par catégorie */}
@@ -3797,7 +4485,17 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                         <Check size={19} strokeWidth={3} className="text-accent transi" />
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="font-bold text-sm block truncate">{titreDe(h)}</span>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-bold text-sm truncate">{titreDe(h)}</span>
+                          {h.auto && (
+                            <span
+                              className="text-xs font-bold px-1.5 py-0.5 rounded bg-carte2 text-brume shrink-0"
+                              title="Validée automatiquement : la séance avait été commencée puis oubliée"
+                            >
+                              auto
+                            </span>
+                          )}
+                        </span>
                         <span className="text-brume text-xs block mt-0.5">
                           {FORMAT_JOUR.format(depuisCle(h.d))}
                           {h.detail ? ` · ${h.detail.length} exo${h.detail.length > 1 ? "s" : ""}` : ""}
@@ -3818,15 +4516,26 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
                     <div className="px-3 pb-3 vue">
                       {h.detail && h.detail.length ? (
                         <div className="rounded-xl bg-fond p-3 space-y-1.5">
-                          {h.detail.map((dexo, j) => (
-                            <div key={j} className="flex items-baseline justify-between gap-3">
-                              <span className="text-xs font-bold text-douce truncate">{dexo.nom}</span>
-                              <span className="text-xs text-brume chiffres shrink-0">
-                                {dexo.series} × {dexo.reps}
-                                {dexo.charge ? ` · ${dexo.charge} kg` : ""}
-                              </span>
-                            </div>
-                          ))}
+                          {h.detail.map((dexo, j) => {
+                            const ch = texteCharges(dexo);
+                            /* charges différentes d'une série à l'autre : sur une 2e ligne */
+                            const variees = ch.includes("/");
+                            return (
+                              <div key={j}>
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <span className="text-xs font-bold text-douce truncate">{dexo.nom}</span>
+                                  <span className="text-xs text-brume chiffres shrink-0">
+                                    {dexo.minutes
+                                      ? `${dexo.minutes} min`
+                                      : `${dexo.series} × ${dexo.reps}${ch && !variees ? ` · ${ch}` : ""}`}
+                                  </span>
+                                </div>
+                                {variees && (
+                                  <p className="text-xs text-brume chiffres text-right">{ch}</p>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-brume text-xs leading-relaxed">
@@ -3843,7 +4552,8 @@ function VueHistorique({ profil, historique, toutesSeances, surSupprimer }) {
         </section>
       ))}
       <p className="text-brume text-center text-xs leading-relaxed">
-        Une séance validée par erreur ? Supprime-la ici, l’assiduité se recalcule toute seule.
+        Une séance validée par erreur (ou validée « auto » alors que c’était un essai) ?
+        Supprime-la ici, l’assiduité se recalcule toute seule.
       </p>
     </div>
   );
@@ -4089,7 +4799,11 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
                       <span className="flex-1 min-w-0">
                         <span className="font-bold text-sm block truncate">{exo.nom}</span>
                         <span className="text-brume text-xs block chiffres">
-                          {s.tabata ? `${(s.rounds && s.rounds[exoId]) || 8} rounds` : `${exo.series} × ${exo.reps}`} · {exo.zone}
+                          {s.tabata
+                            ? `${(s.rounds && s.rounds[exoId]) || 8} rounds`
+                            : exo.duree
+                            ? `${exo.duree} min`
+                            : `${exo.series} × ${exo.reps}`} · {exo.zone}
                         </span>
                       </span>
                       {s.tabata && (
@@ -4187,7 +4901,7 @@ function VueEditeur({ initial, dico, exosPerso, surSauverExo, surSupprimerExo, s
 }
 
 /* Sélecteur d'exercices plein écran : recherche + filtres par zone */
-function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSupprimerExo, surBasculer, surFermer }) {
+function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPerso, surSauverExo, surSupprimerExo, surBasculer, surFermer }) {
   const [recherche, setRecherche] = useState("");
   const [zone, setZone] = useState(null); // null = toutes
   const [form, setForm] = useState(undefined); // undefined ferm\u00e9 \u00b7 null nouveau \u00b7 objet = \u00e9dition
@@ -4273,15 +4987,18 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
               <div className="space-y-2">
                 {sec.exos.map((exo) => {
                   const choisi = exoIds.includes(exo.id);
+                  /* déjà dans la séance : on ne l'ajoute pas une deuxième fois */
+                  const pris = !choisi && !!indisponibles && indisponibles.has(exo.id);
                   return (
                     <div
                       key={exo.id}
                       className={`rounded-2xl border flex items-stretch transi ${
                         choisi ? "bg-carte bordure-accent-douce" : "bg-carte border-ligne"
-                      }`}
+                      } ${pris ? "opacity-50" : ""}`}
                     >
                       <button
-                        onClick={() => surBasculer(exo.id)}
+                        onClick={() => !pris && surBasculer(exo.id)}
+                        disabled={pris}
                         aria-pressed={choisi}
                         className="flex-1 min-w-0 p-3 flex items-center gap-3 text-left active:scale-98 transi"
                       >
@@ -4296,18 +5013,24 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
                             )}
                           </span>
                           <span className="text-brume text-xs block mt-0.5 chiffres">
-                            {exo.series} × {exo.reps} · repos {exo.repos} s
+                            {pris
+                              ? "Déjà dans la séance"
+                              : exo.duree
+                              ? `${exo.duree} min en continu`
+                              : `${exo.series} × ${exo.reps} · repos ${exo.repos} s`}
                           </span>
                         </span>
-                        <span
-                          className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transi ${
-                            choisi ? "bg-accent" : "bg-carte2"
-                          }`}
-                        >
-                          {choisi
-                            ? <Check size={18} strokeWidth={3.5} className="text-accent-ink pop" />
-                            : <Plus size={18} className="text-brume" />}
-                        </span>
+                        {!pris && (
+                          <span
+                            className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 transi ${
+                              choisi ? "bg-accent" : "bg-carte2"
+                            }`}
+                          >
+                            {choisi
+                              ? <Check size={18} strokeWidth={3.5} className="text-accent-ink pop" />
+                              : <Plus size={18} className="text-brume" />}
+                          </span>
+                        )}
                       </button>
                       {exo.perso && (
                         <button
@@ -4352,6 +5075,14 @@ function SelecteurExos({ nomSeance, exoIds, dico, exosPerso, surSauverExo, surSu
   );
 }
 
+/* Intensité d'un cardio maison → MET pour l'estimation d'énergie
+   (classes de l'OMS / ACSM : modéré de 3 à 6 MET, soutenu au-delà) */
+const INTENSITES = [
+  { id: "douce", nom: "Douce", met: 3.5 },
+  { id: "moderee", nom: "Modérée", met: 5 },
+  { id: "soutenue", nom: "Soutenue", met: 7.5 },
+];
+
 /* Formulaire de création / édition d'un exercice personnalisé */
 function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
   useVerrouScroll();
@@ -4362,9 +5093,20 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
   const [reps, setReps] = useState(initial ? String(initial.reps) : "12");
   const [repos, setRepos] = useState(initial ? String(initial.repos) : "60");
   const [sansCharge, setSansCharge] = useState(initial ? !!initial.sansCharge : false);
-  const [consigne, setConsigne] = useState(initial && initial.charge ? initial.charge.esteban : "");
+  const [consigne, setConsigne] = useState(
+    initial && initial.charge ? initial.charge.standard || initial.charge.esteban || "" : ""
+  );
   const [conseil, setConseil] = useState(initial ? initial.conseil || "" : "");
   const [groupe, setGroupe] = useState(initial ? initial.groupe || null : null);
+  /* cardio : en durée (tapis, vélo…) ou en séries (fractionné) */
+  const [enDuree, setEnDuree] = useState(initial ? !!initial.duree : true);
+  const [duree, setDuree] = useState(initial && initial.duree ? String(initial.duree) : "20");
+  const [intensite, setIntensite] = useState(() => {
+    const met = initial && typeof initial.met === "number" ? initial.met : 5;
+    return INTENSITES.reduce((a, b) => (Math.abs(b.met - met) < Math.abs(a.met - met) ? b : a)).id;
+  });
+  const cardio = zone === "Cardio";
+  const continu = cardio && enDuree;
 
   const valide = nom.trim().length > 0 && muscles.length > 0;
 
@@ -4379,17 +5121,20 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 
   function enregistrer() {
     const texteConsigne = consigne.trim() || "À ton rythme — la technique d’abord";
+    const minutes = Math.max(1, parseInt(duree, 10) || 20);
     surSauver({
       id: initial ? initial.id : `exo-${Date.now()}`,
       perso: true,
       nom: nom.trim(),
       zone,
       muscles,
-      series: Math.max(1, parseInt(series, 10) || 3),
-      reps: reps.trim() || "12",
-      repos: parseInt(repos, 10) || 60,
-      sansCharge,
-      groupe: groupe || undefined,
+      series: continu ? 1 : Math.max(1, parseInt(series, 10) || 3),
+      reps: continu ? `${minutes} min` : reps.trim() || "12",
+      repos: continu ? 0 : parseInt(repos, 10) || 60,
+      sansCharge: continu ? true : sansCharge,
+      ...(continu ? { duree: minutes } : {}),
+      ...(cardio ? { met: INTENSITES.find((i) => i.id === intensite).met } : {}),
+      groupe: groupe || (cardio ? (continu ? "cardio-continu" : "cardio-fractionne") : undefined),
       charge: { standard: texteConsigne, doux: texteConsigne },
       variante: "",
       conseil: conseil.trim(),
@@ -4500,6 +5245,64 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
             </p>
           </div>
 
+          {cardio && (
+            <div>
+              <span className={etiquette}>Format</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[[true, "En durée", "tapis, vélo, rameur…"], [false, "En séries", "fractionné, HIIT"]].map(([v, titre, detail]) => (
+                  <button
+                    key={titre}
+                    onClick={() => setEnDuree(v)}
+                    aria-pressed={enDuree === v}
+                    className={`rounded-xl px-3 py-2 text-left transi ${
+                      enDuree === v ? "bg-accent text-accent-ink" : "bg-carte text-douce border border-ligne"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">{titre}</span>
+                    <span className={`block text-xs mt-0.5 ${enDuree === v ? "opacity-75" : "text-brume"}`}>{detail}</span>
+                  </button>
+                ))}
+              </div>
+              {continu && (
+                <div className="mt-3 flex gap-1.5">
+                  {["10", "15", "20", "30", "45"].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDuree(d)}
+                      className={`flex-1 rounded-xl text-sm font-bold chiffres transi ${
+                        duree === d ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                      }`}
+                      style={{ height: 44 }}
+                    >
+                      {d} min
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span className={`${etiquette} mt-4`}>Intensité</span>
+              <div className="flex gap-1.5">
+                {INTENSITES.map((i) => (
+                  <button
+                    key={i.id}
+                    onClick={() => setIntensite(i.id)}
+                    className={`flex-1 rounded-xl text-sm font-bold transi ${
+                      intensite === i.id ? "bg-accent text-accent-ink" : "bg-carte text-brume border border-ligne"
+                    }`}
+                    style={{ height: 44 }}
+                  >
+                    {i.nom}
+                  </button>
+                ))}
+              </div>
+              <p className="text-brume text-xs mt-2 leading-relaxed">
+                Douce : tu peux chanter. Modérée : parler, pas chanter. Soutenue : quelques mots
+                seulement. Sert à estimer l’énergie dépensée.
+              </p>
+            </div>
+          )}
+
+          {!continu && (
+          <>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <span className={etiquette}>Séries</span>
@@ -4565,6 +5368,8 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
             </span>
             <span className="text-sm font-bold flex-1">Au poids du corps (pas de charge à noter)</span>
           </button>
+          </>
+          )}
 
           <label className="block">
             <span className={etiquette}>Consigne de départ (optionnel)</span>
@@ -4617,41 +5422,24 @@ function FormExo({ initial, surSauver, surSupprimer, surFermer }) {
 /* ------------------------------------------------------------------ */
 
 function VueSeance({
-  seance, profil, niveau, etat, charges, dico, tousExos, faiteCetteSemaine, historique,
+  seance, profil, niveau, etat, charges, dico, tousExos, faiteCetteSemaine, historique, idsProgramme,
   exosPerso, surSauverExo, surSupprimerExo,
-  surRetour, surCoche, surSeries, surRemplacer, surCharge, surRepos,
+  surRetour, surCoche, surSeries, surChargeSerie, surDuree, surRemplacer, surCharge, surRepos,
   surBasculerAjout, surRetirerAjout, surRoundsAjout, surDeplacer, surReinitOrdre,
   surFin, surFinAvecSauvegarde, surAnnuler,
 }) {
   const checks = etat.coches;
   const [ajoutOuvert, setAjoutOuvert] = useState(false);
   const [tabataActif, setTabataActif] = useState(null); // {slotId, exo, rounds}
-  /* dernière performance enregistrée par exercice (séance validée la plus récente) */
-  const dernieresPerfs = useMemo(() => {
-    const m = {};
-    for (let i = historique.length - 1; i >= 0; i--) {
-      const h = historique[i];
-      if (!h.detail) continue;
-      for (const dexo of h.detail) {
-        if (!m[dexo.id]) m[dexo.id] = { ...dexo, d: h.d };
-      }
-    }
-    return m;
-  }, [historique]);
-  const [roue, setRoue] = useState(null); // exo dont on règle la charge
+  const dernieresPerfs = useMemo(() => dernieresPerfsDe(historique), [historique]);
+  /* feuille de charge : {exo} (charge unique, tabata) ou {exo, slotId, index} (une série) */
+  const [roue, setRoue] = useState(null);
+  const [roueDuree, setRoueDuree] = useState(null); // {exo, slotId, minutes}
   const [confirmation, setConfirmation] = useState(false); // séance écourtée
 
   /* emplacements = exercices du programme + ajouts propres à cette séance,
      dans l'ordre choisi pour la séance du jour */
-  const slots = ordonnerSlots(
-    [
-      ...seance.exos.map((e) => ({ slotId: e.id, base: e, roundsBase: (seance.rounds && seance.rounds[e.id]) || 8, ajout: false })),
-      ...etat.ajouts
-        .map((a) => ({ slotId: a.slotId, base: dico[a.exoId], roundsBase: a.rounds || 8, ajout: true }))
-        .filter((s) => s.base),
-    ],
-    etat.ordre
-  );
+  const slots = slotsDe(seance, etat, dico);
   const slotIds = slots.map((s) => s.slotId);
   const ordreModifie = etat.ordre && etat.ordre.length > 0;
 
@@ -4667,8 +5455,7 @@ function VueSeance({
   const exosFaits = slots
     .filter((s) => checks[s.slotId])
     .map((s) => etat.remplacements[s.slotId] || s.base.id);
-  /* exercices déjà affichés dans la séance : exclus des variantes (doublons) */
-  const dejaAffiches = new Set(slots.map((s) => etat.remplacements[s.slotId] || s.base.id));
+  const affiches = slots.map((s) => exoDuSlot(s, etat, dico).id);
 
   return (
     <div key={`${profil}-${seance.id}`} className="vue">
@@ -4736,14 +5523,39 @@ function VueSeance({
 
         {/* exercices (programme + ajouts) */}
         {slots.map((s, i) => {
-          const exoAffiche = (etat.remplacements[s.slotId] && dico[etat.remplacements[s.slotId]]) || s.base;
+          const exoAffiche = exoDuSlot(s, etat, dico);
+          /* Variantes : même famille de mouvement, mais jamais un exercice déjà
+             au programme (toutes séances confondues) ni déjà affiché ailleurs
+             dans la séance. On peut toujours revenir à l'exercice d'origine. */
+          const ailleurs = new Set(affiches.filter((_, j) => j !== i));
           const variantes = exoAffiche.groupe
             ? tousExos.filter(
                 (e) =>
                   e.groupe === exoAffiche.groupe &&
-                  (e.id === exoAffiche.id || !dejaAffiches.has(e.id))
+                  (e.id === exoAffiche.id ||
+                    (e.id === s.base.id && !ailleurs.has(e.id)) ||
+                    (!idsProgramme.has(e.id) && !ailleurs.has(e.id)))
               )
             : [];
+          const seriesFaites = etat.series[s.slotId] || 0;
+          const continu = !seance.tabata && !!exoAffiche.duree;
+          const parSerie = !seance.tabata && !continu && !exoAffiche.sansCharge;
+          const nbLignes = Math.min(8, Math.max(exoAffiche.series, seriesFaites));
+          const chargesLignes = parSerie
+            ? chargesDeSerie(
+                nbLignes,
+                etat.chargesSeries[s.slotId],
+                exoAffiche.id,
+                dernieresPerfs[exoAffiche.id],
+                charges[exoAffiche.id]
+              )
+            : null;
+          const dureeSaisie = etat.durees[s.slotId];
+          const minutes = continu
+            ? dureeSaisie && dureeSaisie.exo === exoAffiche.id
+              ? dureeSaisie.v
+              : (dernieresPerfs[exoAffiche.id] && dernieresPerfs[exoAffiche.id].minutes) || exoAffiche.duree
+            : null;
           return (
             <CarteExo
               key={s.slotId}
@@ -4756,16 +5568,27 @@ function VueSeance({
               profil={profil}
               niveau={niveau}
               coche={!!checks[s.slotId]}
-              seriesFaites={etat.series[s.slotId] || 0}
+              seriesFaites={seriesFaites}
+              chargesLignes={chargesLignes}
+              minutes={minutes}
               poids={charges[exoAffiche.id] || ""}
               dernierePerf={dernieresPerfs[exoAffiche.id]}
               tabata={seance.tabata || null}
-              rounds={s.roundsBase}
+              rounds={s.rounds}
               surCoche={() => surCoche(s.slotId)}
-              surSeries={(n) => surSeries(s.slotId, exoAffiche.series, n)}
-              surRoue={() => setRoue(exoAffiche)}
+              surSeries={(n) =>
+                surSeries(
+                  s.slotId,
+                  exoAffiche.series,
+                  n,
+                  chargesLignes ? { exo: exoAffiche.id, valeurs: chargesLignes } : null
+                )
+              }
+              surRoue={() => setRoue({ exo: exoAffiche })}
+              surRoueSerie={(index) => setRoue({ exo: exoAffiche, slotId: s.slotId, index, valeur: chargesLignes[index] })}
+              surRoueDuree={() => setRoueDuree({ exo: exoAffiche, slotId: s.slotId, minutes })}
               surRepos={() => surRepos(exoAffiche)}
-              surTabata={() => setTabataActif({ slotId: s.slotId, exo: exoAffiche, rounds: s.roundsBase })}
+              surTabata={() => setTabataActif({ slotId: s.slotId, exo: exoAffiche, rounds: s.rounds })}
               surRetirer={s.ajout ? () => surRetirerAjout(s.slotId) : null}
               surMonter={i > 0 ? () => surDeplacer(slotIds, s.slotId, -1) : null}
               surDescendre={i < slots.length - 1 ? () => surDeplacer(slotIds, s.slotId, 1) : null}
@@ -4773,7 +5596,7 @@ function VueSeance({
                 s.ajout && seance.tabata
                   ? () => {
                       const paliers = [2, 4, 6, 8, 10, 12];
-                      const prochain = paliers[(paliers.indexOf(s.roundsBase) + 1) % paliers.length] || 8;
+                      const prochain = paliers[(paliers.indexOf(s.rounds) + 1) % paliers.length] || 8;
                       surRoundsAjout(s.slotId, prochain);
                     }
                   : null
@@ -4848,6 +5671,7 @@ function VueSeance({
       </button>
       <p className="text-brume text-center text-xs mt-3 leading-relaxed">
         Douleur articulaire vive ? On passe l’exercice, sans culpabiliser — voir Conseils.
+        Oublié de valider ? Elle se validera toute seule demain, à la date d’aujourd’hui.
       </p>
 
       {confirmation && (
@@ -4863,10 +5687,25 @@ function VueSeance({
 
       {roue && (
         <FeuilleCharge
-          exo={roue}
-          valeurInitiale={charges[roue.id] || ""}
-          surValider={(v) => { surCharge(roue.id, v); setRoue(null); }}
+          exo={roue.exo}
+          sousTitre={roue.slotId ? `Série ${roue.index + 1} · charge utilisée` : "Charge utilisée"}
+          valeurInitiale={roue.slotId ? roue.valeur || "" : charges[roue.exo.id] || ""}
+          sansEffacer={!!roue.slotId}
+          surValider={(v) => {
+            if (roue.slotId) surChargeSerie(roue.slotId, roue.exo.id, roue.index, v);
+            else surCharge(roue.exo.id, v);
+            setRoue(null);
+          }}
           surFermer={() => setRoue(null)}
+        />
+      )}
+
+      {roueDuree && (
+        <FeuilleDuree
+          exo={roueDuree.exo}
+          valeurInitiale={roueDuree.minutes}
+          surValider={(m) => { surDuree(roueDuree.slotId, roueDuree.exo.id, m); setRoueDuree(null); }}
+          surFermer={() => setRoueDuree(null)}
         />
       )}
 
@@ -4888,6 +5727,13 @@ function VueSeance({
         <SelecteurExos
           nomSeance={`À ajouter à ${seance.titre}`}
           exoIds={etat.ajouts.filter((a) => !etat.remplacements[a.slotId]).map((a) => a.exoId)}
+          indisponibles={
+            new Set(
+              slots
+                .filter((s) => !s.ajout || etat.remplacements[s.slotId])
+                .map((s) => exoDuSlot(s, etat, dico).id)
+            )
+          }
           dico={dico}
           exosPerso={exosPerso}
           surSauverExo={surSauverExo}
@@ -5247,7 +6093,7 @@ function RoueExercices({ categories, choisi, surChoisir }) {
   );
 }
 
-function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
+function FeuilleCharge({ exo, sousTitre = "Charge utilisée", valeurInitiale, sansEffacer = false, surValider, surFermer }) {
   useVerrouScroll();
   const nombre = parseFloat(String(valeurInitiale).replace(",", "."));
   const initEntier = Number.isFinite(nombre) ? Math.max(0, Math.min(300, Math.floor(nombre))) : 20;
@@ -5266,7 +6112,7 @@ function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
         <div className="flex items-center gap-3 mb-2">
           <div className="flex-1 min-w-0">
             <h3 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h3>
-            <p className="text-brume text-xs mt-0.5">Charge utilisée</p>
+            <p className="text-brume text-xs mt-0.5">{sousTitre}</p>
           </div>
           <button
             onClick={surFermer}
@@ -5290,12 +6136,14 @@ function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
         </div>
 
         <div className="mt-4 flex items-center gap-2">
-          <button
-            onClick={() => surValider("")}
-            className="h-14 px-4 rounded-2xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
-          >
-            Effacer
-          </button>
+          {!sansEffacer && (
+            <button
+              onClick={() => surValider("")}
+              className="h-14 px-4 rounded-2xl bg-carte2 text-brume text-sm font-bold active:scale-95 transi"
+            >
+              Effacer
+            </button>
+          )}
           <button
             onClick={() => surValider(valeur)}
             className="flex-1 h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
@@ -5303,6 +6151,58 @@ function FeuilleCharge({ exo, valeurInitiale, surValider, surFermer }) {
             Valider {valeur} kg
           </button>
         </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* Durée faite sur un exercice de cardio continu (roue de 1 à 120 min) */
+const ROUE_MINUTES = Array.from({ length: 120 }, (_, i) => String(i + 1));
+
+function FeuilleDuree({ exo, valeurInitiale, surValider, surFermer }) {
+  useVerrouScroll();
+  const init = Math.max(1, Math.min(120, parseInt(valeurInitiale, 10) || exo.duree || 20));
+  const [idx, setIdx] = useState(init - 1);
+  const minutes = idx + 1;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 voile font-jakarta text-encre" onClick={surFermer}>
+      <div
+        className="absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-3xl bg-carte border-t border-ligne p-5 coussin-bas surgit"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base leading-tight truncate">{exo.nom}</h3>
+            <p className="text-brume text-xs mt-0.5">Durée faite</p>
+          </div>
+          <button
+            onClick={surFermer}
+            aria-label="Fermer"
+            className="h-11 w-11 rounded-xl bg-carte2 flex items-center justify-center active:scale-95 transi"
+          >
+            <X size={18} className="text-brume" />
+          </button>
+        </div>
+
+        <div className="relative flex items-center justify-center gap-1">
+          <div
+            className="absolute pointer-events-none rounded-xl bg-carte2"
+            style={{ top: (200 - ROUE_H) / 2, height: ROUE_H, left: 24, right: 24, opacity: 0.45 }}
+          />
+          <Roue valeurs={ROUE_MINUTES} index={idx} surIndex={setIdx} largeur={96} />
+          <div style={{ height: 200 }} className="flex items-center">
+            <span className="font-bold text-brume text-sm pl-1">min</span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => surValider(minutes)}
+          className="mt-4 w-full h-14 rounded-2xl bg-accent text-accent-ink font-extrabold text-base active:scale-98 transi chiffres"
+        >
+          Valider {minutes} min
+        </button>
       </div>
     </div>,
     document.body
@@ -5325,14 +6225,20 @@ function EtapeSimple({ icone: Icone, etiquette, coche, surCoche, children }) {
 }
 
 function CarteExo({
-  numero, total, exo, nomOriginal, estAjout, variantes = [], profil, niveau, coche, seriesFaites, poids,
-  dernierePerf, tabata, rounds, surCoche, surSeries, surRoue, surRepos, surVariante, surTabata,
+  numero, total, exo, nomOriginal, estAjout, variantes = [], profil, niveau, coche, seriesFaites,
+  chargesLignes, minutes, poids, dernierePerf, tabata, rounds,
+  surCoche, surSeries, surRoue, surRoueSerie, surRoueDuree, surRepos, surVariante, surTabata,
   surRetirer, surRoundsCycle, surMonter, surDescendre,
 }) {
-  const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const aVariantes = variantes.length > 1;
+  const continu = !tabata && !!exo.duree;
+  const parSerie = !!chargesLignes;
+  const nbPastilles = Math.min(6, Math.max(exo.series, seriesFaites));
   const [glisse, setGlisse] = useState(0);
   const depart = useRef(null);
+  /* consignes techniques repliées pour un exercice déjà pratiqué :
+     la carte reste courte, le schéma des muscles reste visible */
+  const [technique, setTechnique] = useState(!dernierePerf);
 
   function toucheDebut(e) {
     if (!aVariantes) return;
@@ -5351,6 +6257,8 @@ function CarteExo({
     setGlisse(0);
     depart.current = null;
   }
+
+  const muscles = (exo.muscles || []).map((m) => MUSCLES_LIBELLES[m]).filter(Boolean).join(" · ") || "—";
 
   return (
     <div
@@ -5403,6 +6311,11 @@ function CarteExo({
                 <strong className="text-accent transi">{rounds} rounds</strong>
                 <span className="text-brume"> · {tabata.travail} s effort / {tabata.repos} s repos</span>
               </>
+            ) : continu ? (
+              <>
+                <strong className="text-accent transi">{exo.duree} min</strong>
+                <span className="text-brume"> · en continu</span>
+              </>
             ) : (
               <>
                 <strong className="text-accent transi">{exo.series} × {exo.reps}</strong>
@@ -5410,17 +6323,16 @@ function CarteExo({
               </>
             )}
           </p>
-          {dernierePerf ? (
+          {/* le réglage d'intensité du cardio reste toujours affiché */}
+          {(continu || !dernierePerf) && (
+            <p className="text-xs text-douce mt-1.5 leading-relaxed">{(exo.charge && (exo.charge[niveau] || exo.charge.standard)) || ""}</p>
+          )}
+          {dernierePerf && (
             <p className="text-xs mt-1.5 leading-relaxed">
               <span className="text-accent transi font-bold">Dernière fois :</span>{" "}
-              <span className="text-douce chiffres">
-                {dernierePerf.series} × {dernierePerf.reps}
-                {dernierePerf.charge ? ` · ${dernierePerf.charge} kg` : ""}
-              </span>
+              <span className="text-douce chiffres">{texteDetail(dernierePerf)}</span>
               <span className="text-brume"> · {FORMAT_MINI.format(depuisCle(dernierePerf.d))}</span>
             </p>
-          ) : (
-            <p className="text-xs text-douce mt-1.5 leading-relaxed">{exo.charge[niveau]}</p>
           )}
         </div>
         <div className="flex flex-col items-center gap-2 shrink-0">
@@ -5459,51 +6371,138 @@ function CarteExo({
         </div>
       </div>
 
-      {/* séries faites : une pastille par série, tape après chaque série */}
-      {!tabata && (
-      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-        <span className="text-xs text-brume font-bold mr-1">Séries</span>
-        {Array.from({ length: nbPastilles }).map((_, i) => (
-          <button
-            key={i}
-            onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
-            aria-label={`Série ${i + 1} ${i < seriesFaites ? "faite" : "à faire"}`}
-            className={`h-9 w-9 rounded-full text-xs font-extrabold chiffres transi ${
-              i < seriesFaites ? "bg-accent text-accent-ink" : "bg-carte2 text-brume active:scale-95"
-            }`}
+      {/* tableau des séries : une ligne par série, avec SA charge */}
+      {parSerie && (
+        <div className="mt-3 rounded-xl bg-fond p-1.5">
+          <div
+            className="flex items-center gap-2 px-1.5 pt-0.5 pb-1 text-brume font-bold uppercase tracking-wide"
+            style={{ fontSize: 10 }}
           >
-            {i < seriesFaites ? <Check size={15} strokeWidth={3.5} className="mx-auto pop" /> : i + 1}
-          </button>
-        ))}
-        {seriesFaites >= exo.series && nbPastilles < 6 && (
-          <button
-            onClick={() => surSeries(seriesFaites + 1)}
-            aria-label="Ajouter une série bonus"
-            className="h-9 w-9 rounded-full bg-carte2 text-brume flex items-center justify-center active:scale-95 transi"
-          >
-            <Plus size={15} />
-          </button>
-        )}
-        <span className="text-xs text-brume chiffres ml-auto">{seriesFaites}/{exo.series}</span>
-      </div>
-      )}
-
-      <div className={coche ? "opacity-50" : ""}>
-        {exo.conseil ? <p className="text-xs text-brume mt-3 leading-relaxed">{exo.conseil}</p> : null}
-        {exo.variante ? (
-          <p className="text-xs text-brume mt-1.5 leading-relaxed italic">Variante : {exo.variante}</p>
-        ) : null}
-
-        <div className="mt-3 flex items-center gap-3 rounded-xl bg-fond p-2.5">
-          <SchemaMuscles muscles={exo.muscles || []} hauteur={80} />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-brume uppercase tracking-wide">Muscles travaillés</p>
-            <p className="text-xs text-douce mt-1.5 leading-relaxed">
-              {(exo.muscles || []).map((m) => MUSCLES_LIBELLES[m]).filter(Boolean).join(" · ") || "—"}
-            </p>
+            <span className="w-7 text-center">Série</span>
+            <span className="flex-1 pl-1">Charge</span>
+            <span className="w-14 text-center">Reps</span>
+            <span className="w-10 text-center">Fait</span>
+          </div>
+          <div className="space-y-1">
+            {chargesLignes.map((c, i) => {
+              const faite = i < seriesFaites;
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 rounded-lg px-1.5 transi ${faite ? "bg-accent-soft" : ""}`}
+                  style={{ height: 48 }}
+                >
+                  <span className={`w-7 text-center text-sm font-extrabold chiffres transi ${faite ? "text-accent" : "text-brume"}`}>
+                    {i + 1}
+                  </span>
+                  <button
+                    onClick={() => surRoueSerie(i)}
+                    aria-label={`Charge de la série ${i + 1} : ${c || "non renseignée"}`}
+                    className="flex-1 min-w-0 h-10 rounded-lg bg-carte2 px-3 flex items-center gap-1.5 active:scale-98 transi"
+                  >
+                    <span className="flex-1 min-w-0 text-left font-extrabold chiffres text-base truncate">{c || "—"}</span>
+                    <span className="text-xs text-brume shrink-0">kg</span>
+                    <ChevronDown size={13} className="text-brume shrink-0" />
+                  </button>
+                  <span className="w-14 text-center text-xs text-brume chiffres truncate">{exo.reps}</span>
+                  <button
+                    onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
+                    aria-pressed={faite}
+                    aria-label={`Série ${i + 1} ${faite ? "faite" : "à faire"}`}
+                    className="w-10 h-10 flex items-center justify-center shrink-0"
+                  >
+                    <span
+                      className={`h-9 w-9 rounded-full flex items-center justify-center transi ${
+                        faite ? "bg-accent" : "border-2 border-slate-600 active:scale-95"
+                      }`}
+                    >
+                      {faite && <Check size={17} strokeWidth={3.5} className="text-accent-ink pop" />}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 pt-1.5">
+            {seriesFaites >= exo.series && chargesLignes.length < 8 ? (
+              <button
+                onClick={() => surSeries(seriesFaites + 1)}
+                className="h-10 px-3 rounded-lg text-brume text-xs font-bold flex items-center gap-1 active:scale-95 transi"
+              >
+                <Plus size={14} /> Série bonus
+              </button>
+            ) : (
+              <span className="text-xs text-brume chiffres px-2">{seriesFaites}/{exo.series} séries</span>
+            )}
+            <span className="flex-1" />
+            <button
+              onClick={surRepos}
+              className="h-10 px-3 rounded-lg bg-carte2 text-xs font-bold flex items-center gap-1.5 active:scale-95 transi"
+            >
+              <Timer size={15} className="text-accent transi" />
+              Repos {exo.repos} s
+            </button>
           </div>
         </div>
+      )}
 
+      {/* au poids du corps : des pastilles suffisent */}
+      {!tabata && !continu && !parSerie && (
+        <>
+          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-brume font-bold mr-1">Séries</span>
+            {Array.from({ length: nbPastilles }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => surSeries(i + 1 === seriesFaites ? i : i + 1)}
+                aria-label={`Série ${i + 1} ${i < seriesFaites ? "faite" : "à faire"}`}
+                className={`h-9 w-9 rounded-full text-xs font-extrabold chiffres transi ${
+                  i < seriesFaites ? "bg-accent text-accent-ink" : "bg-carte2 text-brume active:scale-95"
+                }`}
+              >
+                {i < seriesFaites ? <Check size={15} strokeWidth={3.5} className="mx-auto pop" /> : i + 1}
+              </button>
+            ))}
+            {seriesFaites >= exo.series && nbPastilles < 6 && (
+              <button
+                onClick={() => surSeries(seriesFaites + 1)}
+                aria-label="Ajouter une série bonus"
+                className="h-9 w-9 rounded-full bg-carte2 text-brume flex items-center justify-center active:scale-95 transi"
+              >
+                <Plus size={15} />
+              </button>
+            )}
+            <span className="text-xs text-brume chiffres ml-auto">{seriesFaites}/{exo.series}</span>
+          </div>
+          <button
+            onClick={surRepos}
+            className="mt-3 w-full rounded-xl bg-carte2 px-4 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transi"
+            style={{ height: 48 }}
+          >
+            <Timer size={17} className="text-accent transi" />
+            Repos {exo.repos} s
+          </button>
+        </>
+      )}
+
+      {/* cardio continu : on note le temps fait */}
+      {continu && (
+        <button
+          onClick={surRoueDuree}
+          aria-label={`Durée faite sur ${exo.nom} : ${minutes} minutes`}
+          className="mt-3 w-full flex items-center gap-2 rounded-xl bg-carte2 px-3 text-left active:scale-98 transi"
+          style={{ height: 48 }}
+        >
+          <Timer size={16} className="text-accent shrink-0 transi" />
+          <span className="text-xs text-brume shrink-0">Durée</span>
+          <span className="flex-1 min-w-0 text-right font-extrabold chiffres text-base">{minutes}</span>
+          <span className="text-xs text-brume shrink-0">min</span>
+          <ChevronDown size={14} className="text-brume shrink-0" />
+        </button>
+      )}
+
+      {/* tabata : charge unique et chrono guidé */}
+      {tabata && (
         <div className="mt-3 flex items-center gap-2">
           {!exo.sansCharge && (
             <button
@@ -5520,27 +6519,38 @@ function CarteExo({
               <ChevronDown size={14} className="text-brume shrink-0" />
             </button>
           )}
-          {tabata ? (
-            <button
-              onClick={surTabata}
-              className={`rounded-xl bg-accent text-accent-ink px-4 font-extrabold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
-              style={{ height: 48 }}
-            >
-              <Play size={16} strokeWidth={2.5} />
-              Lancer · ≈ {Math.max(1, Math.round((5 + rounds * tabata.travail + (rounds - 1) * tabata.repos) / 60))} min
-            </button>
-          ) : (
-            <button
-              onClick={surRepos}
-              className={`rounded-xl bg-carte2 px-4 font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
-              style={{ height: 48 }}
-            >
-              <Timer size={17} className="text-accent transi" />
-              Repos {exo.repos} s
-            </button>
-          )}
+          <button
+            onClick={surTabata}
+            className={`rounded-xl bg-accent text-accent-ink px-4 font-extrabold text-sm flex items-center justify-center gap-2 active:scale-95 transi ${exo.sansCharge ? "flex-1" : "shrink-0"}`}
+            style={{ height: 48 }}
+          >
+            <Play size={16} strokeWidth={2.5} />
+            Lancer · ≈ {Math.max(1, Math.round((5 + rounds * tabata.travail + (rounds - 1) * tabata.repos) / 60))} min
+          </button>
         </div>
-      </div>
+      )}
+
+      {/* muscles toujours visibles ; consignes techniques dépliables */}
+      <button
+        onClick={() => setTechnique(!technique)}
+        aria-expanded={technique}
+        className={`mt-3 w-full flex items-center gap-3 rounded-xl bg-fond p-2 pr-3 text-left transi ${coche ? "opacity-50" : ""}`}
+      >
+        <SchemaMuscles muscles={exo.muscles || []} hauteur={46} />
+        <span className="flex-1 min-w-0 text-xs text-douce leading-snug">{muscles}</span>
+        <span className="text-xs font-bold text-brume shrink-0 flex items-center gap-1">
+          Technique
+          <ChevronDown size={14} className={`transi ${technique ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {technique && (exo.conseil || exo.variante) && (
+        <div className={`px-1 vue ${coche ? "opacity-50" : ""}`}>
+          {exo.conseil ? <p className="text-xs text-brume mt-2.5 leading-relaxed">{exo.conseil}</p> : null}
+          {exo.variante ? (
+            <p className="text-xs text-brume mt-1.5 leading-relaxed italic">Variante : {exo.variante}</p>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
