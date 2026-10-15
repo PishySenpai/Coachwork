@@ -6,7 +6,7 @@ import {
   Stethoscope, Scale, Cloud, CloudOff, Pencil, Trash2, Search,
   ChevronUp, Copy, SquarePen, ArrowLeftRight, Play, Pause, Share2, Download,
   RotateCcw, House, LayoutList, CalendarDays, CircleUser, Trophy, Zap, Weight, Activity,
-  ArrowUpDown, ChevronRight, LogOut, Clock, Info, CalendarCheck, Users, UserPlus,
+  ArrowUpDown, ChevronRight, LogOut, Clock, Info, CalendarCheck, Users, UserPlus, Sun, SunMoon,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -132,9 +132,9 @@ const API_SYNC = "/api/etat";
 const API_ESPACE = "/api/espace";
 const API_PARTAGE = "/api/partage";
 /* Identifient l'appareil : hors espace, jamais synchronisées */
-const CLES_APPAREIL = new Set(["app:code", "app:espace", "app:espacesConnus"]);
+const CLES_APPAREIL = new Set(["app:code", "app:espace", "app:espacesConnus", "app:theme"]);
 /* Rangées dans l'espace mais propres à l'appareil : jamais synchronisées */
-const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code", "app:espace", "app:espacesConnus"]);
+const CLES_LOCALES = new Set(["app:profil", "app:horodatages", "app:code", "app:espace", "app:espacesConnus", "app:theme"]);
 
 let horodatages = {};
 let syncDisponible = false;
@@ -2385,6 +2385,11 @@ export default function App() {
   const [corbeilleOuverte, setCorbeilleOuverte] = useState(false);
   const [toast, setToast] = useState(null); // {message, action?: {libelle, fn}, duree?}
   const [verifOubli, setVerifOubli] = useState(0); // déclenche la recherche de séances oubliées
+  const [theme, setTheme] = useState("sombre"); // sombre | clair | auto (réglage de l'appareil)
+  const [clairSysteme, setClairSysteme] = useState(() => {
+    try { return window.matchMedia("(prefers-color-scheme: light)").matches; } catch (e) { return false; }
+  });
+  const themeEffectif = theme === "auto" ? (clairSysteme ? "clair" : "sombre") : theme;
   const vivantRef = useRef(true);
   /* dernier état connu, pour les actions différées (bouton « Annuler » d'un toast) */
   const etatRef = useRef({});
@@ -2407,7 +2412,10 @@ export default function App() {
   useEffect(() => {
     vivantRef.current = true;
     (async () => {
-      /* l'espace d'abord : il détermine où les données sont rangées */
+      /* l'apparence d'abord, pour ne pas afficher le chargement dans le mauvais thème */
+      const t = await lire("app:theme");
+      if (vivantRef.current && ["sombre", "clair", "auto"].includes(t)) setTheme(t);
+      /* puis l'espace : il détermine où les données sont rangées */
       codeApp = await lire("app:code");
       espaceApp = await lire("app:espace");
       horodatages = (await lire("app:horodatages")) || {};
@@ -2662,6 +2670,34 @@ export default function App() {
     document.addEventListener("visibilitychange", vis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [chargement, syncEtat, espace]);
+
+  /* ---- apparence : clair, sombre, ou celle du téléphone (auto) ----
+     data-apparence et pas data-theme : la visionneuse d'artefacts pose déjà
+     data-theme sur la page */
+  useEffect(() => {
+    document.documentElement.dataset.apparence = themeEffectif;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", themeEffectif === "clair" ? "#F4F5F7" : "#08090C");
+  }, [themeEffectif]);
+
+  useEffect(() => {
+    if (theme !== "auto") return;
+    let mq;
+    try { mq = window.matchMedia("(prefers-color-scheme: light)"); } catch (e) { return; }
+    const maj = () => setClairSysteme(mq.matches);
+    maj();
+    if (mq.addEventListener) mq.addEventListener("change", maj);
+    else mq.addListener(maj);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", maj);
+      else mq.removeListener(maj);
+    };
+  }, [theme]);
+
+  function choisirTheme(t) {
+    setTheme(t);
+    ecrireBrut("app:theme", t);
+  }
 
   /* ---- enregistrement du service worker (notifications + hors-ligne) ---- */
   useEffect(() => {
@@ -3410,6 +3446,8 @@ export default function App() {
                 surAjouterProfil={ajouterProfil}
                 surDefinirCode={definirCodeEspace}
                 surChangerEspace={quitterEspace}
+                theme={theme}
+                surTheme={choisirTheme}
               />
             )}
           </>
@@ -3479,8 +3517,7 @@ function Feuille({ titre, sousTitre, icone: Icone, surFermer, children, sansEnte
   return createPortal(
     <div className="fixed inset-0 z-50 voile font-jakarta text-encre flex items-end" onClick={surFermer}>
       <div
-        className="feuille w-full mx-auto max-w-md rounded-t-4xl bg-carte px-5 pt-2.5 coussin-bas"
-        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}
+        className="feuille w-full mx-auto max-w-md rounded-t-4xl bg-carte px-5 pt-2.5 coussin-bas ombre-feuille"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -3886,7 +3923,7 @@ function BarreHaut({ profils, store, profilActif, espace, syncEtat, surHaltere, 
               data-accent={p.accent || "lime"}
               className={`relative rounded-full flex items-center justify-center font-extrabold text-[13px] shrink-0 transi pastille-${
                 p.accent || "lime"
-              } text-fond ${actif ? "anneau-accent z-10" : "scale-[0.86] opacity-80 active:scale-75"}`}
+              } encre-pastille ${actif ? "anneau-accent z-10" : "scale-[0.86] opacity-80 active:scale-75"}`}
               style={{ height: 34, width: 34, marginLeft: i === 0 ? 0 : serre ? -6 : 8 }}
             >
               {nom.charAt(0).toUpperCase()}
@@ -3932,7 +3969,7 @@ function NavBas({ onglet, surChoisir, alerteProfil }) {
               <span className={`relative h-8 w-[52px] rounded-full flex items-center justify-center transi ${actif ? "bg-accent-soft" : ""}`}>
                 <Icone size={21} strokeWidth={actif ? 2.4 : 1.9} className={`transi ${actif ? "text-accent" : "text-brume"}`} />
                 {id === "profil" && alerteProfil && (
-                  <span className="absolute top-0.5 right-3 h-2 w-2 rounded-full" style={{ background: "#f87171" }} />
+                  <span className="absolute top-0.5 right-3 h-2 w-2 rounded-full pastille-alerte" />
                 )}
               </span>
               <span className={`text-[10.5px] leading-none transi truncate max-w-full ${actif ? "text-encre font-bold" : "text-brume font-semibold"}`}>
@@ -4379,6 +4416,7 @@ function ChampLigne({ libelle, valeur, placeholder, unite, numerique, surChange 
 function VueProfil({
   profil, profilObj, profils, donnees, espace, syncEtat,
   surMesure, surMajProfil, surSupprimerProfil, surAjouterProfil, surDefinirCode, surChangerEspace,
+  theme = "sombre", surTheme,
 }) {
   const p = profilObj;
   const nom = nomAffiche(donnees, p);
@@ -4393,7 +4431,7 @@ function VueProfil({
     <div key={profil} className="vue space-y-7">
       <div className="flex flex-col items-center text-center pt-1">
         <span
-          className={`h-24 w-24 rounded-full pastille-${accent} text-fond flex items-center justify-center text-[40px] font-extrabold transi`}
+          className={`h-24 w-24 rounded-full pastille-${accent} encre-pastille flex items-center justify-center text-[40px] font-extrabold transi`}
           style={{ boxShadow: "0 16px 40px -12px var(--accent-bordure)" }}
         >
           {nom.charAt(0).toUpperCase()}
@@ -4457,11 +4495,35 @@ function VueProfil({
                   choisi ? "anneau-accent" : "scale-90"
                 }`}
               >
-                {choisi && <Check size={18} strokeWidth={3.5} className="text-fond" />}
+                {choisi && <Check size={18} strokeWidth={3.5} className="encre-pastille" />}
               </button>
             );
           })}
         </div>
+      </Section>
+
+      <Section titre="Apparence">
+        <div className="surface rounded-3xl p-1.5 grid grid-cols-3 gap-1.5" role="group" aria-label="Apparence">
+          {[["sombre", "Sombre", Moon], ["clair", "Clair", Sun], ["auto", "Auto", SunMoon]].map(([id, libelle, Icone]) => {
+            const choisi = theme === id;
+            return (
+              <button
+                key={id}
+                onClick={() => surTheme(id)}
+                aria-pressed={choisi}
+                className={`h-[62px] rounded-[20px] flex flex-col items-center justify-center gap-1 text-[13px] font-bold transi ${
+                  choisi ? "bg-accent text-accent-ink" : "text-brume active:bg-carte2"
+                }`}
+              >
+                <Icone size={18} strokeWidth={2.2} />
+                {libelle}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-sourd text-xs mt-2.5 px-1 leading-relaxed">
+          Auto suit le réglage du téléphone. Ce choix ne vaut que pour cet appareil.
+        </p>
       </Section>
 
       <Section titre="Espace">
@@ -6378,8 +6440,7 @@ function VueSeance({
       {createPortal(
         <div className="fixed inset-x-0 bottom-0 z-30 font-jakarta text-encre pointer-events-none">
           <div
-            className="mx-auto max-w-md px-4 pt-6 barre-action pointer-events-auto"
-            style={{ background: "linear-gradient(to top, rgba(8,9,12,0.98) 55%, rgba(8,9,12,0))" }}
+            className="mx-auto max-w-md px-4 pt-6 barre-action pointer-events-auto degrade-bas"
           >
             <button
               onClick={() => (tout ? surFin() : setConfirmation(true))}

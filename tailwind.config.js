@@ -1,17 +1,21 @@
+/* couleurs portées par des variables CSS (canaux RGB) : le thème clair ou
+   sombre les redéfinit sur <html data-apparence>, l'opacité Tailwind reste possible */
+const jeton = (nom) => `rgb(var(--c-${nom}) / <alpha-value>)`;
+
 export default {
   content: ["./App.jsx", "./entry.jsx"],
   theme: {
     extend: {
       colors: {
-        fond: "#08090C",
-        carte: "#121419",
-        carte2: "#1B1E25",
-        carte3: "#252932",
-        encre: "#F3F5F8",
-        douce: "#C7CCD5",
-        brume: "#8B92A0",
-        sourd: "#5E6571",
-        ligne: "rgba(255,255,255,0.07)",
+        fond: jeton("fond"),
+        carte: jeton("carte"),
+        carte2: jeton("carte2"),
+        carte3: jeton("carte3"),
+        encre: jeton("encre"),
+        douce: jeton("douce"),
+        brume: jeton("brume"),
+        sourd: jeton("sourd"),
+        ligne: "var(--c-ligne)",
       },
       fontFamily: {
         jakarta: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],

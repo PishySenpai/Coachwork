@@ -2,13 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- thème & accents par profil ---------- */
-/* lime redéfini explicitement : un élément marqué lime (écran d'entrée,
-   avatar, pastille) le reste même à l'intérieur d'un profil d'une autre couleur */
+/* ---------- thème : sombre par défaut, clair sur <html data-apparence="clair"> ---------- */
+:root {
+  --c-fond: 8 9 12;
+  --c-carte: 18 20 25;
+  --c-carte2: 27 30 37;
+  --c-carte3: 37 41 50;
+  --c-encre: 243 245 248;
+  --c-douce: 199 204 213;
+  --c-brume: 139 146 160;
+  --c-sourd: 94 101 113;
+  --c-ligne: rgba(255, 255, 255, 0.07);
+  --ombre-surface: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 0 0 1px rgba(255, 255, 255, 0.035);
+  --ombre-surface-2: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --ombre-feuille: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --verre-fond: rgba(18, 20, 25, 0.78);
+  --verre-ombre: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.5);
+  --heros-fond: #13161b;
+  --heros-reflet: rgba(255, 255, 255, 0.025);
+  --heros-ombre: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --voile: rgba(3, 4, 6, 0.72);
+  --piste: rgba(255, 255, 255, 0.07);
+  --poignee: rgba(255, 255, 255, 0.16);
+  --ombre-toast: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 16px 36px rgba(0, 0, 0, 0.55);
+  --rouge: #f87171;
+  --rouge-doux: rgba(248, 113, 113, 0.14);
+  --or: #fbbf24;
+  --or-doux: rgba(251, 191, 36, 0.14);
+  --barre-statut: transparent;
+  color-scheme: dark;
+}
+:root[data-apparence="clair"] {
+  --c-fond: 244 245 247;
+  --c-carte: 255 255 255;
+  --c-carte2: 238 240 243;
+  --c-carte3: 222 226 232;
+  --c-encre: 14 17 22;
+  --c-douce: 58 64 74;
+  --c-brume: 104 112 125;
+  --c-sourd: 150 157 168;
+  --c-ligne: rgba(15, 23, 42, 0.08);
+  --ombre-surface: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --ombre-surface-2: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  --ombre-feuille: 0 -12px 40px rgba(15, 23, 42, 0.12);
+  --verre-fond: rgba(255, 255, 255, 0.84);
+  --verre-ombre: 0 0 0 1px rgba(15, 23, 42, 0.07), 0 14px 34px rgba(15, 23, 42, 0.14);
+  --heros-fond: #ffffff;
+  --heros-reflet: transparent;
+  --heros-ombre: 0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.06),
+    0 18px 36px -20px rgba(15, 23, 42, 0.22);
+  --voile: rgba(15, 23, 42, 0.32);
+  --piste: rgba(15, 23, 42, 0.08);
+  --poignee: rgba(15, 23, 42, 0.18);
+  --ombre-toast: 0 0 0 1px rgba(15, 23, 42, 0.07), 0 16px 36px rgba(15, 23, 42, 0.16);
+  --rouge: #dc2626;
+  --rouge-doux: rgba(220, 38, 38, 0.1);
+  --or: #b45309;
+  --or-doux: rgba(245, 158, 11, 0.16);
+  /* iOS impose un texte blanc dans la barre d'état de l'app installée :
+     une bande sombre derrière l'heure et la batterie les garde lisibles */
+  --barre-statut: #0e1116;
+  color-scheme: light;
+}
+
+/* ---------- accents par profil ----------
+   --accent : remplissages (boutons, pastilles, jours faits)
+   --accent-texte / --accent-trait : texte et traits, plus foncés en thème clair */
 :root,
 [data-accent="lime"] {
   --accent: #a3e635;
   --accent-ink: #131a05;
+  --accent-texte: #a3e635;
+  --accent-trait: #a3e635;
   --accent-soft: rgba(163, 230, 53, 0.13);
   --accent-bordure: rgba(163, 230, 53, 0.35);
   --accent-halo: rgba(163, 230, 53, 0.16);
@@ -16,6 +81,8 @@
 [data-accent="corail"] {
   --accent: #fb7185;
   --accent-ink: #2b070d;
+  --accent-texte: #fb7185;
+  --accent-trait: #fb7185;
   --accent-soft: rgba(251, 113, 133, 0.14);
   --accent-bordure: rgba(251, 113, 133, 0.4);
   --accent-halo: rgba(251, 113, 133, 0.17);
@@ -23,6 +90,8 @@
 [data-accent="azur"] {
   --accent: #38bdf8;
   --accent-ink: #04202e;
+  --accent-texte: #38bdf8;
+  --accent-trait: #38bdf8;
   --accent-soft: rgba(56, 189, 248, 0.14);
   --accent-bordure: rgba(56, 189, 248, 0.4);
   --accent-halo: rgba(56, 189, 248, 0.17);
@@ -30,6 +99,8 @@
 [data-accent="turquoise"] {
   --accent: #2dd4bf;
   --accent-ink: #032420;
+  --accent-texte: #2dd4bf;
+  --accent-trait: #2dd4bf;
   --accent-soft: rgba(45, 212, 191, 0.14);
   --accent-bordure: rgba(45, 212, 191, 0.4);
   --accent-halo: rgba(45, 212, 191, 0.16);
@@ -37,27 +108,68 @@
 [data-accent="violet"] {
   --accent: #c084fc;
   --accent-ink: #240b38;
+  --accent-texte: #c084fc;
+  --accent-trait: #c084fc;
   --accent-soft: rgba(192, 132, 252, 0.15);
   --accent-bordure: rgba(192, 132, 252, 0.42);
   --accent-halo: rgba(192, 132, 252, 0.18);
 }
+:root[data-apparence="clair"],
+[data-apparence="clair"] [data-accent="lime"] {
+  --accent-texte: #4d7c0f;
+  --accent-trait: #65a30d;
+  --accent-soft: rgba(132, 204, 22, 0.18);
+  --accent-bordure: rgba(101, 163, 13, 0.5);
+  --accent-halo: rgba(163, 230, 53, 0.34);
+}
+[data-apparence="clair"] [data-accent="corail"] {
+  --accent-texte: #be123c;
+  --accent-trait: #e11d48;
+  --accent-soft: rgba(244, 63, 94, 0.12);
+  --accent-bordure: rgba(225, 29, 72, 0.45);
+  --accent-halo: rgba(251, 113, 133, 0.3);
+}
+[data-apparence="clair"] [data-accent="azur"] {
+  --accent-texte: #0369a1;
+  --accent-trait: #0284c7;
+  --accent-soft: rgba(14, 165, 233, 0.12);
+  --accent-bordure: rgba(2, 132, 199, 0.45);
+  --accent-halo: rgba(56, 189, 248, 0.3);
+}
+[data-apparence="clair"] [data-accent="turquoise"] {
+  --accent-texte: #0f766e;
+  --accent-trait: #0d9488;
+  --accent-soft: rgba(20, 184, 166, 0.13);
+  --accent-bordure: rgba(13, 148, 136, 0.45);
+  --accent-halo: rgba(45, 212, 191, 0.3);
+}
+[data-apparence="clair"] [data-accent="violet"] {
+  --accent-texte: #7e22ce;
+  --accent-trait: #9333ea;
+  --accent-soft: rgba(168, 85, 247, 0.12);
+  --accent-bordure: rgba(147, 51, 234, 0.42);
+  --accent-halo: rgba(192, 132, 252, 0.3);
+}
+
 /* pastilles de choix de couleur (aperçu indépendant de l'accent actif) */
 .pastille-lime { background-color: #a3e635; }
 .pastille-corail { background-color: #fb7185; }
 .pastille-azur { background-color: #38bdf8; }
 .pastille-turquoise { background-color: #2dd4bf; }
 .pastille-violet { background-color: #c084fc; }
+/* encre posée sur une pastille colorée : toujours sombre, quel que soit le thème */
+.encre-pastille { color: #0b0d10; }
 
 html {
-  background: #08090c;
-  color-scheme: dark;
+  background: rgb(var(--c-fond));
 }
 body {
-  background: #08090c;
-  color: #f3f5f8;
+  background: rgb(var(--c-fond));
+  color: rgb(var(--c-encre));
   margin: 0;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease;
 }
 
 /* halo d'ambiance : une lueur de la couleur du profil en haut de l'écran */
@@ -70,6 +182,16 @@ body::before {
   pointer-events: none;
   z-index: 0;
   transition: background 0.4s ease;
+}
+/* bande derrière la barre d'état (thème clair, app installée sur iPhone) */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--barre-statut);
+  pointer-events: none;
+  z-index: 70;
 }
 #root {
   position: relative;
@@ -125,32 +247,39 @@ body.fige .coquille {
 }
 
 /* ---------- surfaces ---------- */
-/* carte : surface pleine + liseré lumineux en haut, sans bordure dure */
+/* carte : surface pleine + liseré, sans bordure dure */
 .surface {
-  background-color: #121419;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 0 0 1px rgba(255, 255, 255, 0.035);
+  background-color: rgb(var(--c-carte));
+  box-shadow: var(--ombre-surface);
 }
 .surface-2 {
-  background-color: #1b1e25;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background-color: rgb(var(--c-carte2));
+  box-shadow: var(--ombre-surface-2);
 }
 /* verre dépoli : barres flottantes (navigation, minuteur, actions) */
 .verre {
-  background: rgba(18, 20, 25, 0.78);
+  background: var(--verre-fond);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--verre-ombre);
 }
 /* carte « héros » : dégradé de la couleur du profil dans le coin */
 .degrade-heros {
   background:
     radial-gradient(110% 90% at 100% 0%, var(--accent-halo), transparent 62%),
-    radial-gradient(80% 70% at 0% 100%, rgba(255, 255, 255, 0.025), transparent 60%),
-    #13161b;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    radial-gradient(80% 70% at 0% 100%, var(--heros-reflet), transparent 60%),
+    var(--heros-fond);
+  box-shadow: var(--heros-ombre);
 }
 .lueur-accent {
   box-shadow: 0 10px 28px -8px var(--accent-bordure);
+}
+/* fondu sous la barre d'action fixée en bas de la séance */
+.degrade-bas {
+  background: linear-gradient(to top, rgb(var(--c-fond) / 0.98) 55%, rgb(var(--c-fond) / 0));
+}
+.ombre-feuille {
+  box-shadow: var(--ombre-feuille);
 }
 
 /* ---------- typographie ---------- */
@@ -197,7 +326,7 @@ body.fige .coquille {
   z-index: 30;
   margin-top: calc(-1 * env(safe-area-inset-top, 0px));
   padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
-  background: linear-gradient(to bottom, rgba(8, 9, 12, 0.96) 70%, rgba(8, 9, 12, 0));
+  background: linear-gradient(to bottom, rgb(var(--c-fond) / 0.96) 70%, rgb(var(--c-fond) / 0));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -207,7 +336,7 @@ body.fige .coquille {
   top: calc(0.75rem + env(safe-area-inset-top, 0px));
 }
 .ombre-toast {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 16px 36px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--ombre-toast);
 }
 
 /* poignée des feuilles du bas */
@@ -215,7 +344,7 @@ body.fige .coquille {
   width: 38px;
   height: 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--poignee);
 }
 
 /* roue de sélection (façon iOS) : défilement aimanté, scrollbar masquée */
@@ -239,53 +368,54 @@ body.fige .coquille {
   scroll-snap-align: center;
   font-size: 22px;
   font-weight: 600;
-  color: #5e6571;
+  color: rgb(var(--c-sourd));
   cursor: pointer;
   overflow: hidden;
   padding: 0 6px;
   transition: color 0.15s ease;
 }
 .roue-active {
-  color: #f3f5f8;
+  color: rgb(var(--c-encre));
   font-weight: 800;
 }
 
 .bg-accent { background-color: var(--accent); }
-.text-accent { color: var(--accent); }
+.text-accent { color: var(--accent-texte); }
 .text-accent-ink { color: var(--accent-ink); }
 .bg-accent-soft { background-color: var(--accent-soft); }
-.stroke-accent { stroke: var(--accent); }
-.stroke-carte2 { stroke: #1b1e25; }
-.stroke-piste { stroke: rgba(255, 255, 255, 0.07); }
-.fill-accent { fill: var(--accent); }
+.stroke-accent { stroke: var(--accent-trait); }
+.stroke-carte2 { stroke: rgb(var(--c-carte2)); }
+.stroke-piste { stroke: var(--piste); }
+.fill-accent { fill: var(--accent-trait); }
 .bordure-accent-douce { border-color: var(--accent-bordure); }
-.anneau-accent { box-shadow: 0 0 0 2px #08090c, 0 0 0 4px var(--accent); }
+.anneau-accent { box-shadow: 0 0 0 2px rgb(var(--c-fond)), 0 0 0 4px var(--accent-trait); }
 .contour-accent { box-shadow: inset 0 0 0 1.5px var(--accent-bordure); }
 .encre-sur-accent { background-color: var(--accent-ink); color: var(--accent); }
 
 .chiffres { font-variant-numeric: tabular-nums; }
 
 /* rouge sémantique (suppression), distinct des accents de profil */
-.bg-rouge-doux { background-color: rgba(248, 113, 113, 0.14); }
-.text-rouge { color: #f87171; }
+.bg-rouge-doux { background-color: var(--rouge-doux); }
+.text-rouge { color: var(--rouge); }
+.pastille-alerte { background-color: var(--rouge); }
 /* or sémantique (records) */
-.text-or { color: #fbbf24; }
-.bg-or-doux { background-color: rgba(251, 191, 36, 0.14); }
+.text-or { color: var(--or); }
+.bg-or-doux { background-color: var(--or-doux); }
 
 /* schéma musculaire */
-.schema-base { fill: #262a33; }
-.schema-actif { fill: var(--accent); transition: fill 0.2s ease; }
-.schema-texte { fill: #5e6571; font-size: 10px; font-weight: 600; }
+.schema-base { fill: rgb(var(--c-carte3)); }
+.schema-actif { fill: var(--accent-trait); transition: fill 0.2s ease; }
+.schema-texte { fill: rgb(var(--c-sourd)); font-size: 10px; font-weight: 600; }
 
 /* courbe de progression des charges */
-.grille-progres { stroke: rgba(255, 255, 255, 0.06); stroke-width: 1; stroke-dasharray: 3 4; }
-.axe-progres { fill: #5e6571; font-size: 10px; }
+.grille-progres { stroke: var(--piste); stroke-width: 1; stroke-dasharray: 3 4; }
+.axe-progres { fill: rgb(var(--c-sourd)); font-size: 10px; }
 .aire-progres { fill: url(#degrade-courbe); }
-.ligne-progres { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.point-progres { fill: #08090c; stroke: var(--accent); stroke-width: 2; }
-.point-final { fill: var(--accent); }
-.valeur-progres { fill: var(--accent); font-size: 11px; font-weight: 800; }
-.stop-accent { stop-color: var(--accent); }
+.ligne-progres { stroke: var(--accent-trait); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.point-progres { fill: rgb(var(--c-carte)); stroke: var(--accent-trait); stroke-width: 2; }
+.point-final { fill: var(--accent-trait); }
+.valeur-progres { fill: var(--accent-texte); font-size: 11px; font-weight: 800; }
+.stop-accent { stop-color: var(--accent-trait); }
 
 /* ---------- transitions & animations ---------- */
 .transi {
@@ -340,7 +470,7 @@ body.fige .coquille {
   to { opacity: 1; }
 }
 .voile {
-  background: rgba(3, 4, 6, 0.72);
+  background: var(--voile);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   animation: voile 0.2s ease-out both;
@@ -366,7 +496,7 @@ body.fige .coquille {
 .eclat { animation: eclat 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-trait);
   outline-offset: 2px;
 }
 

@@ -28,6 +28,11 @@ Navigation par une barre flottante en bas (à portée de pouce), cinq onglets :
 - **Journal** : calendrier du mois et détail de chaque séance (durée, charges, records).
 - **Profil** : repères, niveau, couleur, espace et code, conseils du coach, profils.
 
+**Apparence** (dans Profil) : Sombre par défaut, Clair, ou Auto qui suit le réglage du
+téléphone. Le choix est propre à chaque appareil et n'est jamais synchronisé. Sur iPhone,
+l'app installée impose un texte blanc dans la barre d'état : en thème clair, une fine bande
+sombre derrière l'heure et la batterie les garde lisibles.
+
 Les profils se changent d'un tap sur les avatars en haut à droite ; la couleur du profil
 teinte toute l'interface. En séance, l'exercice en cours est déplié et les autres repliés
 avec leur résumé ; un chrono mesure la durée réelle, et les records battus sont fêtés à la
