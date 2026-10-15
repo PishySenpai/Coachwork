@@ -34,13 +34,18 @@ const corps = `<title>Coachwork — Programme duo</title>
 writeFileSync("artifact.html", corps);
 
 // Version déployée : mêmes contenus + en-têtes PWA (manifest, icônes, service worker)
+// Barre d'état opaque (« default ») et pas « black-translucent » : avec la barre
+// translucide, iOS 26 raccourcit la vue web de la hauteur de la barre d'état
+// (bug WebKit 301108) et laisse une bande morte en bas de l'écran. iOS ne lit ce
+// réglage qu'à l'installation : l'app doit être retirée puis rajoutée à l'écran
+// d'accueil pour en profiter.
 const tetePWA = `<meta name="theme-color" content="#08090C">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icone-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Coachwork">
 `;
 writeFileSync(

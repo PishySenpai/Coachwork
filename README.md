@@ -29,9 +29,14 @@ Navigation par une barre flottante en bas (à portée de pouce), cinq onglets :
 - **Profil** : repères, niveau, couleur, espace et code, conseils du coach, profils.
 
 **Apparence** (dans Profil) : Sombre par défaut, Clair, ou Auto qui suit le réglage du
-téléphone. Le choix est propre à chaque appareil et n'est jamais synchronisé. Sur iPhone,
-l'app installée impose un texte blanc dans la barre d'état : en thème clair, une fine bande
-sombre derrière l'heure et la batterie les garde lisibles.
+téléphone. Le choix est propre à chaque appareil et n'est jamais synchronisé.
+
+**iPhone (app installée)** : la barre d'état est opaque. En mode translucide, iOS 26
+raccourcit la vue web de la hauteur de la barre d'état (bug WebKit 301108) : la barre de
+navigation flottait trop haut au-dessus d'une bande vide. iOS ne lit ce réglage qu'à
+l'installation : une app ajoutée à l'écran d'accueil avant ce changement doit être
+supprimée puis rajoutée depuis Safari. Les données sont sur le serveur : il suffit de
+rouvrir l'espace avec son nom et son code.
 
 Les profils se changent d'un tap sur les avatars en haut à droite ; la couleur du profil
 teinte toute l'interface. En séance, l'exercice en cours est déplié et les autres repliés

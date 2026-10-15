@@ -59,8 +59,9 @@
   --rouge-doux: rgba(220, 38, 38, 0.1);
   --or: #b45309;
   --or-doux: rgba(245, 158, 11, 0.16);
-  /* iOS impose un texte blanc dans la barre d'état de l'app installée :
-     une bande sombre derrière l'heure et la batterie les garde lisibles */
+  /* apps installées avant le passage à la barre d'état opaque : iOS y impose
+     un texte blanc, une bande sombre derrière l'heure le garde lisible
+     (avec la barre opaque, la zone mesure 0 et la bande disparaît) */
   --barre-statut: #0e1116;
   color-scheme: light;
 }
@@ -207,6 +208,26 @@ html, body {
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: pan-y;
+}
+/* Écran applicatif : la référence de tout ce qui est « fixe » (navigation,
+   minuteur, barre de validation, feuilles). Un ancêtre transformé devient le
+   référentiel des position:fixed : ils restent calés sur la zone réellement
+   affichée, même quand iOS désaccorde le viewport des fixes de celui de la page
+   (iOS 26 a eu plusieurs bugs de ce genre dans les apps installées). Il ne
+   défile jamais : c'est .coquille qui défile. */
+.ecran {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+@supports (height: 100dvh) {
+  .ecran {
+    height: 100dvh;
+  }
+}
+.ecran > .coquille {
+  height: 100%;
 }
 .coquille {
   height: 100vh;

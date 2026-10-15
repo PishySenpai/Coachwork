@@ -2312,6 +2312,12 @@ function EcranEspace({ erreur, occupe, nomInitial, surOuvrir, surCreer }) {
   );
 }
 
+/* Les surcouches (feuilles, chrono Tabata, fête, barre de validation) se
+   rattachent à l'écran applicatif et non à <body> : voir .ecran dans input.css */
+function coucheModale() {
+  return document.getElementById("ecran") || document.body;
+}
+
 /* Gèle le défilement du fond tant qu'une feuille ou un sélecteur est ouvert */
 let nbVerrousScroll = 0;
 function useVerrouScroll() {
@@ -3328,130 +3334,132 @@ export default function App() {
   }
 
   return (
-    <div ref={defileur} data-accent={accentActif} className="coquille bg-fond text-encre font-jakarta">
-      <div className={`mx-auto max-w-md px-5 ${pleinEcran ? "pb-40" : "pb-36"}`}>
-        {edition ? (
-          <VueEditeur
-            initial={edition.id ? programmesPerso.find((p) => p.id === edition.id) : null}
-            dico={dicoExos}
-            exosPerso={exosPerso}
-            surSauverExo={sauverExoPerso}
-            surSupprimerExo={supprimerExoPerso}
-            surSauver={(brouillon) => sauverProgramme(brouillon, edition.id || null)}
-            surSupprimer={edition.id ? () => supprimerProgramme(edition.id) : null}
-            surFermer={() => setEdition(null)}
-          />
-        ) : seanceOuverte ? (
-          <VueSeance
-            seance={seanceOuverte}
-            profil={profil}
-            niveau={niveauActif}
-            etat={normaliserSeance(donnees.seances[seanceOuverte.id])}
-            charges={donnees.charges}
-            dico={dicoExos}
-            tousExos={tousExos}
-            faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
-            idsProgramme={idsProgrammeOuvert}
-            surRetour={() => setOuverte(null)}
-            surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
-            surSeries={(slotId, cible, n, figer) => noterSeries(seanceOuverte.id, slotId, cible, n, figer)}
-            surChargeSerie={(slotId, exoId, i, v) => noterChargeSerie(seanceOuverte.id, slotId, exoId, i, v)}
-            surDuree={(slotId, exoId, minutes) => noterDuree(seanceOuverte.id, slotId, exoId, minutes)}
-            surRemplacer={(slotId, nouvelId) => remplacerExo(seanceOuverte.id, slotId, nouvelId)}
-            surCharge={noterCharge}
-            surRepos={lancerRepos}
-            historique={donnees.historique}
-            exosPerso={exosPerso}
-            surSauverExo={sauverExoPerso}
-            surSupprimerExo={supprimerExoPerso}
-            surBasculerAjout={(exoId) => basculerAjout(seanceOuverte.id, exoId)}
-            surRetirerAjout={(slotId) => retirerAjout(seanceOuverte.id, slotId)}
-            surRoundsAjout={(slotId, rounds) => noterRoundsAjout(seanceOuverte.id, slotId, rounds)}
-            surDeplacer={(slotIds, slotId, dir) => deplacerSlot(seanceOuverte.id, slotIds, slotId, dir)}
-            surReinitOrdre={() => reinitialiserOrdre(seanceOuverte.id)}
-            surFin={() => terminerSeance(seanceOuverte)}
-            surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
-            surAnnuler={() => retirerValidation(seanceOuverte.id)}
-          />
-        ) : (
-          <>
-            <BarreHaut
-              profils={profils}
-              store={store}
-              profilActif={profil}
-              espace={espace}
-              syncEtat={syncEtat}
-              surHaltere={tapHaltere}
-              surChoisir={choisirProfil}
-              surAjouter={ajouterProfil}
-              surEspace={() => changerOnglet("profil")}
+    <div id="ecran" data-accent={accentActif} className="ecran bg-fond text-encre font-jakarta">
+      <div ref={defileur} className="coquille">
+        <div className={`mx-auto max-w-md px-5 ${pleinEcran ? "pb-40" : "pb-36"}`}>
+          {edition ? (
+            <VueEditeur
+              initial={edition.id ? programmesPerso.find((p) => p.id === edition.id) : null}
+              dico={dicoExos}
+              exosPerso={exosPerso}
+              surSauverExo={sauverExoPerso}
+              surSupprimerExo={supprimerExoPerso}
+              surSauver={(brouillon) => sauverProgramme(brouillon, edition.id || null)}
+              surSupprimer={edition.id ? () => supprimerProgramme(edition.id) : null}
+              surFermer={() => setEdition(null)}
             />
-
-            {onglet === "accueil" ? (
-              <VueAccueil
-                profil={profil}
-                profilObj={profilActif}
-                donnees={donnees}
-                stats={stats}
-                progActuel={progActuel}
-                espace={espace}
-                syncEtat={syncEtat}
-                surOuvrir={setOuverte}
-                surProgrammes={() => changerOnglet("programmes")}
-                surProfil={() => changerOnglet("profil")}
-                surJournal={() => changerOnglet("journal")}
-              />
-            ) : onglet === "programmes" ? (
-              <VueProgrammes
-                profil={profil}
-                programmes={programmes}
-                progActuel={progActuel}
-                stats={stats}
-                syncEtat={syncEtat}
-                corbeille={corbeille}
-                surMode={choisirMode}
-                surOuvrir={setOuverte}
-                surPartager={async (id) => setCodePartage(await partagerProgramme(id))}
-                surImporter={() => setImportOuvert(true)}
-                surCreer={() => setEdition({ nouveau: true })}
-                surEditer={(id) => setEdition({ id })}
-                surCorbeille={() => setCorbeilleOuverte(true)}
-              />
-            ) : onglet === "progres" ? (
-              <VueProgres
-                profil={profil}
-                historique={donnees.historique}
-                dico={dicoExos}
-                stats={stats}
-                objectif={progActuel.seances.length}
-              />
-            ) : onglet === "journal" ? (
-              <VueHistorique
-                profil={profil}
-                historique={donnees.historique}
-                toutesSeances={toutesSeances}
-                surSupprimer={supprimerEntree}
-              />
-            ) : (
-              <VueProfil
-                profil={profil}
-                profilObj={profilActif}
+          ) : seanceOuverte ? (
+            <VueSeance
+              seance={seanceOuverte}
+              profil={profil}
+              niveau={niveauActif}
+              etat={normaliserSeance(donnees.seances[seanceOuverte.id])}
+              charges={donnees.charges}
+              dico={dicoExos}
+              tousExos={tousExos}
+              faiteCetteSemaine={stats.cetteSemaine.has(seanceOuverte.id)}
+              idsProgramme={idsProgrammeOuvert}
+              surRetour={() => setOuverte(null)}
+              surCoche={(eid) => basculerEtape(seanceOuverte.id, eid)}
+              surSeries={(slotId, cible, n, figer) => noterSeries(seanceOuverte.id, slotId, cible, n, figer)}
+              surChargeSerie={(slotId, exoId, i, v) => noterChargeSerie(seanceOuverte.id, slotId, exoId, i, v)}
+              surDuree={(slotId, exoId, minutes) => noterDuree(seanceOuverte.id, slotId, exoId, minutes)}
+              surRemplacer={(slotId, nouvelId) => remplacerExo(seanceOuverte.id, slotId, nouvelId)}
+              surCharge={noterCharge}
+              surRepos={lancerRepos}
+              historique={donnees.historique}
+              exosPerso={exosPerso}
+              surSauverExo={sauverExoPerso}
+              surSupprimerExo={supprimerExoPerso}
+              surBasculerAjout={(exoId) => basculerAjout(seanceOuverte.id, exoId)}
+              surRetirerAjout={(slotId) => retirerAjout(seanceOuverte.id, slotId)}
+              surRoundsAjout={(slotId, rounds) => noterRoundsAjout(seanceOuverte.id, slotId, rounds)}
+              surDeplacer={(slotIds, slotId, dir) => deplacerSlot(seanceOuverte.id, slotIds, slotId, dir)}
+              surReinitOrdre={() => reinitialiserOrdre(seanceOuverte.id)}
+              surFin={() => terminerSeance(seanceOuverte)}
+              surFinAvecSauvegarde={(exoIds) => terminerAvecSauvegarde(seanceOuverte, exoIds)}
+              surAnnuler={() => retirerValidation(seanceOuverte.id)}
+            />
+          ) : (
+            <>
+              <BarreHaut
                 profils={profils}
-                donnees={donnees}
+                store={store}
+                profilActif={profil}
                 espace={espace}
                 syncEtat={syncEtat}
-                surMesure={noterMesure}
-                surMajProfil={(patch) => majProfil(profil, patch)}
-                surSupprimerProfil={() => supprimerProfil(profil)}
-                surAjouterProfil={ajouterProfil}
-                surDefinirCode={definirCodeEspace}
-                surChangerEspace={quitterEspace}
-                theme={theme}
-                surTheme={choisirTheme}
+                surHaltere={tapHaltere}
+                surChoisir={choisirProfil}
+                surAjouter={ajouterProfil}
+                surEspace={() => changerOnglet("profil")}
               />
-            )}
-          </>
-        )}
+
+              {onglet === "accueil" ? (
+                <VueAccueil
+                  profil={profil}
+                  profilObj={profilActif}
+                  donnees={donnees}
+                  stats={stats}
+                  progActuel={progActuel}
+                  espace={espace}
+                  syncEtat={syncEtat}
+                  surOuvrir={setOuverte}
+                  surProgrammes={() => changerOnglet("programmes")}
+                  surProfil={() => changerOnglet("profil")}
+                  surJournal={() => changerOnglet("journal")}
+                />
+              ) : onglet === "programmes" ? (
+                <VueProgrammes
+                  profil={profil}
+                  programmes={programmes}
+                  progActuel={progActuel}
+                  stats={stats}
+                  syncEtat={syncEtat}
+                  corbeille={corbeille}
+                  surMode={choisirMode}
+                  surOuvrir={setOuverte}
+                  surPartager={async (id) => setCodePartage(await partagerProgramme(id))}
+                  surImporter={() => setImportOuvert(true)}
+                  surCreer={() => setEdition({ nouveau: true })}
+                  surEditer={(id) => setEdition({ id })}
+                  surCorbeille={() => setCorbeilleOuverte(true)}
+                />
+              ) : onglet === "progres" ? (
+                <VueProgres
+                  profil={profil}
+                  historique={donnees.historique}
+                  dico={dicoExos}
+                  stats={stats}
+                  objectif={progActuel.seances.length}
+                />
+              ) : onglet === "journal" ? (
+                <VueHistorique
+                  profil={profil}
+                  historique={donnees.historique}
+                  toutesSeances={toutesSeances}
+                  surSupprimer={supprimerEntree}
+                />
+              ) : (
+                <VueProfil
+                  profil={profil}
+                  profilObj={profilActif}
+                  profils={profils}
+                  donnees={donnees}
+                  espace={espace}
+                  syncEtat={syncEtat}
+                  surMesure={noterMesure}
+                  surMajProfil={(patch) => majProfil(profil, patch)}
+                  surSupprimerProfil={() => supprimerProfil(profil)}
+                  surAjouterProfil={ajouterProfil}
+                  surDefinirCode={definirCodeEspace}
+                  surChangerEspace={quitterEspace}
+                  theme={theme}
+                  surTheme={choisirTheme}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {!pleinEcran && (
@@ -3547,7 +3555,7 @@ function Feuille({ titre, sousTitre, icone: Icone, surFermer, children, sansEnte
         {children}
       </div>
     </div>,
-    document.body
+    coucheModale()
   );
 }
 
@@ -3579,7 +3587,7 @@ function Toast({ toast, surFermer }) {
         </button>
       </div>
     </div>,
-    document.body
+    coucheModale()
   );
 }
 
@@ -4749,7 +4757,7 @@ function FeteSeance({ fete, stats, surFermer }) {
         </button>
       </div>
     </div>,
-    document.body
+    coucheModale()
   );
 }
 
@@ -5746,7 +5754,7 @@ function SelecteurExos({ nomSeance, exoIds, indisponibles = null, dico, exosPers
         />
       )}
     </div>,
-    document.body
+    coucheModale()
   );
 }
 
@@ -6459,7 +6467,7 @@ function VueSeance({
             </button>
           </div>
         </div>,
-        document.body
+        coucheModale()
       )}
 
       {confirmation && (
@@ -6780,7 +6788,7 @@ function MinuteurTabata({ exo, rounds, travail, repos, surTerminer, surFermer })
         </p>
       </div>
     </div>,
-    document.body
+    coucheModale()
   );
 }
 
